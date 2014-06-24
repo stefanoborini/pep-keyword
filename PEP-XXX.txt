@@ -16,46 +16,52 @@ Post-History: 30-Aug-2002
 Abstract
 ========
 
-This PEP proposes an extension of the indexing operation to support keyword arguments.
-Notations in the form a[k=3], or a[1:2, k=3, r=5] would become legal syntax. 
+This PEP proposes an extension of the indexing operation to support keyword
+arguments.  Notations in the form a[k=3], or a[1:2, k=3, r=5] would become
+legal syntax. In addition to a change in the parser, the index protocol
+(__getitem__, __setitem__ and __delitem__) will also require adaptation. 
 
 Motivation
 ==========
 
-In some contexts, such as computational physics and chemistry, the use of a
-notation such as Basis[Z=5] can be used to represent strategies for accuracy.
-Additional context may equally enjoy a clear specification of the keys in each
-field during an indexing operation, such as gridValues[x=3, y=5, z=8].
+Using an indexing operation instead of a method clearly implies access to a
+subset of a larger dataset.
 
-The main use case is to be able to set a default value for indexing.
+How the notation is interpreted is up to the implementing class. For example,
+a class could take advantage of a "default" key to set a default return value when
+the index is not present
 
  >>> lst = [1, 2, 3]
  >>> value = lst[3]
-Traceback (most recent call last):
-   File "<stdin>", line 1, in <module>
-IndexError: list index out of range
- >>> try:  # Python
-....     value = lst[3]
-.... except IndexError:
-....     value = 0
- >>> value = lst[3] except IndexError: 0  # PEP 463
- >>> value = lst[3, default=0]  # My proposal
+ >>> value = lst[3, default=0]  # value is 0
 
-Default value is not the only use case. One could for example define a 
-subclass of list computing an interpolation if a float is given as a 
-parameter instead of truncating it, and the keword argument would define 
-which kind of interpolation (nearest, linear, spline...). Or it could 
-define if the value returned are in degrees or radians. (Yes, I have a 
-scientific background.)
+Another use case would be to specify an interpolation strategy for a sparse
+array:
 
-I use something similar for a dictionary-like interface where the keys 
-are strings and only numbers are stored. The second argument, if given, 
-is the default:
- >>> data["key", 0]
-It would be clearer to use:
- >>> data["key", default=0]
-(Of course I could use a get method for this purpose, but bracket for 
-indexing seems always more clear).
+ >>> value = array[1, 3, interpolate="spline"]
+
+The keword argument would specify which kind of interpolation 
+strategy to use to infer point 1,3 from the rest of the data.
+
+It would also allow to define a unit 
+
+ >>> value = array[1, 3, unit="degrees"]
+
+In some contexts, such as computational physics and chemistry, the use of a
+notation such as Basis[Z=5] can be used to represent strategies for accuracy.
+
+ >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
+
+Additional context may equally enjoy a clear specification of the keys in each
+field during an indexing operation, such as 
+
+ >>> gridValues[x=3, y=5, z=8]
+ >>> rain[time=0:12, location=location]
+
+
+
+
+------------------------------------------
 
 The keyword would be keywords-only because right now when many arguments 
 are passed to __getitem__, they are grouped in a tuple and this tuple is 
