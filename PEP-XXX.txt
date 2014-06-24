@@ -1,0 +1,97 @@
+PEP: XXX
+Title: Support for indexing with keyword arguments.
+Version: $Revision: 41421 $
+Last-Modified: $Date: 2005-11-10 06:42:20 -0800 (Thu, 10 Nov 2005) $
+Author: Stefano Borini <stefano.borini@gmail.com>
+Discussion-To: python-ideas@python.org
+Status: Draft
+Type: Standards Track
+Content-Type: text/x-rst
+Created: 24-Jun-2014
+Python-Version: 3.6
+Post-History: 30-Aug-2002
+
+
+Abstract
+========
+
+This PEP proposes an extension of the indexing operation to support keyword arguments.
+A notation in the form a[k=3] would become legal syntax.
+
+Motivation
+==========
+
+In some contexts, such as computational physics and chemistry, the use of a
+notation such as Basis[Z=5] can be used to represent strategies for accuracy.
+Additional context may equally enjoy a clear specification of the keys in each
+field during an indexing operation, such as gridValues[x=3, y=5, z=8].
+
+
+
+========================
+
+The current indexing operation is handled by __getitem__(self, y). This
+methods performs as follows with the three accepted notations for an
+indexing operation:
+
+- When a single element is passed, e.g. a[2], the y argument will be 2.
+- When multiple elements are passed, they must be separated by commas: a[2,3].
+  In this case, y will be a tuple (2,3). Calling a[2,3,"hello",{}] 
+  will give (2,3,"hello",{}) for the value of y.
+
+In both cases, the indexing operation can also accept a slicing notation to
+define intervals, with or without step. Examples of such notations are a[1:10]
+and a[1:10:2]. The y argument of __getitem__ will be a slice object, or a tuple
+containing slice objects if multiple values were passed.
+
+Except for its ability to handle slices, The indexing operation has similarities to
+a plain method call: it acts like one when invoked with only one element, but
+if the number of elements is greater than one, the __getitem__ argument behaves
+like *args.
+
+I would propose to add the possibility for a[Z=3], where y would then be a
+dictionary {"Z": 3}. In the case of a[1:3, 4, Z=3, R=5], the value of y would
+be a tuple containing (slice(1,3,None), 4, {"Z": 3}, {"R": 5}). This allows to
+preserve the ordering as specified (e.g. a[Z=3, R=4] vs a[R=4, Z=3]).
+
+
+Ian Cordasco:
+    And the same would be true of your proposed feature for __getitem__
+    because all keyword arguments would be collected into one dictionary.
+    It would be unreasonable for just one method to behave totally
+    differently from the standard behaviour in Python. It would be
+    confusing for only __getitem__ (and ostensibly, __setitem__) to take
+    keyword arguments but instead of turning them into a dictionary, turn
+    them into individual single-item dictionaries.
+
+
+
+Alternate approaches
+====================
+
+The first obvious alternate approach is to keep the indexing as is, and use a
+traditional function call. This is certainly a possible approach, but it would
+lose the ordering information of the entries. PEP-468 tries to address this.
+Another shortcoming is that a mixed situation requiring a slice would result
+more awkward. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
+
+
+
+
+
+
+
+Copyright
+=========
+
+This document has been placed in the public domain.
+
+
+
+..
+   Local Variables:
+   mode: indented-text
+   indent-tabs-mode: nil
+   sentence-end-double-space: t
+   fill-column: 70
+   End:
