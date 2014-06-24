@@ -2,7 +2,8 @@ PEP: XXX
 Title: Support for indexing with keyword arguments.
 Version: $Revision: 41421 $
 Last-Modified: $Date: 2005-11-10 06:42:20 -0800 (Thu, 10 Nov 2005) $
-Author: Stefano Borini <stefano.borini@gmail.com>
+Author: Joseph Martinot-Lagarde <joseph.martinot-lagarde@...>
+        Stefano Borini <stefano.borini@gmail.com>
 Discussion-To: python-ideas@python.org
 Status: Draft
 Type: Standards Track
@@ -16,7 +17,7 @@ Abstract
 ========
 
 This PEP proposes an extension of the indexing operation to support keyword arguments.
-A notation in the form a[k=3] would become legal syntax.
+Notations in the form a[k=3], or a[1:2, k=3, r=5] would become legal syntax. 
 
 Motivation
 ==========
@@ -26,7 +27,44 @@ notation such as Basis[Z=5] can be used to represent strategies for accuracy.
 Additional context may equally enjoy a clear specification of the keys in each
 field during an indexing operation, such as gridValues[x=3, y=5, z=8].
 
+The main use case is to be able to set a default value for indexing.
 
+ >>> lst = [1, 2, 3]
+ >>> value = lst[3]
+Traceback (most recent call last):
+   File "<stdin>", line 1, in <module>
+IndexError: list index out of range
+ >>> try:  # Python
+....     value = lst[3]
+.... except IndexError:
+....     value = 0
+ >>> value = lst[3] except IndexError: 0  # PEP 463
+ >>> value = lst[3, default=0]  # My proposal
+
+Default value is not the only use case. One could for example define a 
+subclass of list computing an interpolation if a float is given as a 
+parameter instead of truncating it, and the keword argument would define 
+which kind of interpolation (nearest, linear, spline...). Or it could 
+define if the value returned are in degrees or radians. (Yes, I have a 
+scientific background.)
+
+I use something similar for a dictionary-like interface where the keys 
+are strings and only numbers are stored. The second argument, if given, 
+is the default:
+ >>> data["key", 0]
+It would be clearer to use:
+ >>> data["key", default=0]
+(Of course I could use a get method for this purpose, but bracket for 
+indexing seems always more clear).
+
+The keyword would be keywords-only because right now when many arguments 
+are passed to __getitem__, they are grouped in a tuple and this tuple is 
+passed to __getitem__ as a unique argument. Also it is more clear: 
+ordered arguments are the indexes, keyword arguments are the options.
+
+To be perfectly honest I don't think that this proposal is that great, 
+it's main selling point is that a "default" keyword in indexing would be 
+a good alternative for some of the problems raised in PEP 463.
 
 ========================
 
@@ -65,6 +103,8 @@ Ian Cordasco:
     them into individual single-item dictionaries.
 
 
+Note: having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
+a[1,{"k": 2}], which may be indended. What about a[1,{"k":2, "r":3}] then? 
 
 Alternate approaches
 ====================
@@ -79,6 +119,122 @@ more awkward. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
 
 
 
+
+----------------------------------------
+
+The problem with this is, as you note below, that everything between [ 
+and ] is turned into a single object passed on to __getitem__. That 
+includes slice notation I:J:I, which is currently only valid in this 
+context. Syntactically, collection indexing is quite different from 
+function calling. (Python could have been defined so that they were the 
+same.) I think it would be better if the key were syntactically 
+separated from a default, say with ;.
+   value = lst[3; 0]
+
+I believe any proposal along this line would make dict.getitem obsolete, 
+and eliminate any call for list.getitem.
+
+> Default value is not the only use case. One could for example define a
+> subclass of list computing an interpolation if a float is given as a
+> parameter instead of truncating it, and the keword argument would define
+> which kind of interpolation (nearest, linear, spline...).
+
+I think interp should be a method of the subclass.
+
+> Or it could
+> define if the value returned are in degrees or radians. (Yes, I have a
+> scientific background.)
+
+.setunit('degrees') with radians the default.
+
+> I use something similar for a dictionary-like interface where the keys
+> are strings and only numbers are stored. The second argument, if given,
+> is the default:
+>  >>> data["key", 0]
+> It would be clearer to use:
+>  >>> data["key", default=0]
+
+I see data['key'; 0] as an in between compromise. The 0 is separated 
+from the key but without the heavy 'default='.
+
+> (Of course I could use a get method for this purpose, but bracket for
+> indexing seems always more clear).
+
+
+-------------------------------
+
+
+An interesting idea, but that looks far too much like a function call.
+Square brackets and then more and more a function call inside... may
+fail the grit test.
+
+Part of the point of except expressions was that the implementation of
+__getitem__ wouldn't need to have two branches in it. Currently, you
+need to write __getitem__ (which raises an exception on finding a
+problem) plus something else, eg get(), which returns a default
+instead. By your proposal, both branches would go inside __getitem__,
+which means they could share code; but there still need to be two
+branches. That's two branches that need to be written, tested, etc,
+and if the author hasn't thought to handle default=, there's no way to
+get that functionality, same as if there's no get() method. And just
+as with the get method, there'll be an ad-hoc and fairly arbitrary
+puddle of names (some will go "default=", others will say that's way
+too long and go "def=", except that that's a keyword so they'll use
+"dflt=" or something...), unless there's a strong force pushing people
+to one consistent name. Terry's suggestion solves that part of it, but
+also restricts the feature to just default values; with a more general
+keyword argument system, it would make sense to also use this with
+__setitem__ and __delitem__, and I'm not sure how "default value"
+should be interpreted there. Which is better is, of course, a matter
+of opinion! :)
+
+ChrisA
+
+
+
+I tend to see square brackets as a function call but "indexing 
+oriented". Using parenthesis would correspond to calling __call__ while 
+using brackets corresponds to calling __getitem__. And sometimes I'd 
+like to be able to use I:J:K notation for slices in function calls...
+
+>
+> Part of the point of except expressions was that the implementation of
+> __getitem__ wouldn't need to have two branches in it. Currently, you
+> need to write __getitem__ (which raises an exception on finding a
+> problem) plus something else, eg get(), which returns a default
+> instead. By your proposal, both branches would go inside __getitem__,
+> which means they could share code; but there still need to be two
+> branches. That's two branches that need to be written, tested, etc,
+> and if the author hasn't thought to handle default=, there's no way to
+> get that functionality, same as if there's no get() method.
+
+Yes the code would be included by the author rather than by the user. 
+Part of the success of python is that it comes with batteries included !
+
+> And just
+> as with the get method, there'll be an ad-hoc and fairly arbitrary
+> puddle of names (some will go "default=", others will say that's way
+> too long and go "def=", except that that's a keyword so they'll use
+> "dflt=" or something...), unless there's a strong force pushing people
+> to one consistent name.
+
+Well, this argument would hold against using keywords arguments in any 
+function call.
+
+> Terry's suggestion solves that part of it, but
+> also restricts the feature to just default values; with a more general
+> keyword argument system, it would make sense to also use this with
+> __setitem__ and __delitem__, and I'm not sure how "default value"
+> should be interpreted there. Which is better is, of course, a matter
+> of opinion! :)
+
+setitem and delitem don't look like function calls at all IMHO. Keywords 
+arguments for them would be less useful than for getitem.
+
+References
+
+http://article.gmane.org/gmane.comp.python.ideas/27584
+https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 
 
 Copyright
