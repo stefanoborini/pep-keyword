@@ -35,29 +35,33 @@ keyword arguments in the indexing operation, e.g.
    >>> a[K=3]
    >>> a[3,R=3,K=4]
 
-We present the following practical use cases for this notation. 
+The following practical use cases for this notation present two broad categories
+of usage of a keyworded specification in indexing: as an index, and as an option
+contextual to the indexing:
 
-1. In some contexts, such as computational physics and chemistry, the use of a
+1. In some domain, such as computational physics and chemistry, the use of a
 notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
 a level of accuracy
 
   >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
-2. To provide additional context to the indexing
+In this case, the index operation would return a basis set at the chosen level
+of accuracy (represented by the parameter Z)
+
+2. To provide a more communicative meaning to the index, preventing e.g. accidental
+   inversion of indexes
 
   >>> gridValues[x=3, y=5, z=8]
   >>> rain[time=0:12, location=location]
 
-The same notation can be used for non-indexing operations, such as the following
-
-3. a class could take advantage of a "default" key to set a default return
-value when the index is not present
+3. A "default" option allows to specify a default return value when the index
+   is not present
 
   >>> lst = [1, 2, 3]
   >>> value = lst[5, default=0]  # value is 0
 
-4. For a sparse dataset, an interpolation strategy could be passed
-as keyword argument. to infer point 1,3 from the rest of the data.
+4. For a sparse dataset, to specify an interpolation strategy 
+   to infer a missing point from e.g. its surrounding data.
 
  >>> value = array[1, 3, interpolate=spline_interpolator]
 
@@ -65,74 +69,90 @@ as keyword argument. to infer point 1,3 from the rest of the data.
 
   >>> value = array[1, 3, unit="degrees"]
 
-
-
-
-
-
-
-
-
-
 How the notation is interpreted is up to the implementing class. 
 
+Current implementation
+======================
+
+Currently, the indexing operation is handled by methods __getitem__,
+__setitem__ and __delitem__. These methods' signature accept one argument
+for the index (with __setitem__ accepting an additional argument for the set
+value). In the following, we will analyze __getitem__(self, idx) exclusively,
+with the same considerations implied for the remaining two methods.
+
+When an indexing operation is performed, __getitem__(self, idx) is called.
+Traditionally, the full content between square brackets is turned into a single
+object passed to argument idx:
+
+    - When a single element is passed, e.g. a[2], idx will be 2.
+    - When multiple elements are passed, they must be separated by commas: a[2,3].
+      In this case, idx will be a tuple (2,3). With a[2,3,"hello",{}] 
+      idx will be (2,3,"hello",{}).
+    - A slicing notation e.g. a{2:10] will produce a slice object, or a tuple
+      containing slice objects if multiple values were passed.
+
+Except for its unique ability to handle slice notation, the indexing operation
+has similarities to a plain method call: it acts like one when invoked with
+only one element; If the number of elements is greater than one, the
+idx argument behaves like a *args. However, an indexing operation has the
+strong semantic implication of extraction of a subset out of a larger set,
+which is not present in a regular method call.
+
+Specifications
+==============
+
+To include the possibility for keyword expressions such as a[Z=3] while keeping
+compatibility, the implementation should try to preserve the current signature
+for __getitem__. The possible cases that need to be addressed are the following:
+
+1. a[Z=3]       
+2. a[Z=3, R=2]
+3. a[1, Z=3]
+4. a[1, Z=3, R=2]
+5. a[1, 2, Z=3]
+6. a[1, 2, Z=3, R=4]
+7. a[1, Z=3, 2, R=4]
+
+Case 1:
+
+In this case, idx should be a dictionary with a single key {"Z": 3}.
+
+Case 2:
+
+For a[Z=3, R=4], the situation is less trivial. There are two immediate options:
+
+  a. idx becomes a dictionary {"Z": 3, "R": 4}, or
+  b. idx becomes a tuple of two dictionaries, each with a single key
+    ({"Z": 3}, {"R": 4})
+
+option a naturally maps to the traditional **kwargs behavior, however it breaks
+the convention that two or more entries for the index produce a tuple. Option b
+preserves this behavior, and additionally preserves the order. Preserving the order
+is also possible if an OrderedDict is used, as drafted by PEP-468.
+
+Case 3:
+
+The case a[1, Z=3] should produce a tuple (1, {"Z":3})
+
+Case 4,5,6:
+
+As in case a[1, Z=3, R=2] two possible implementations exist
+  a. idx becomes the two-values tuple (1, {"Z":3, "R": 4})
+  b. idx becomes the three values tuple (1, {"Z": 3}, {"R": 4})
 
 
+Case 7:
+
+There are three possible choices for case 7:
+  a. Pack all keyword arguments in the dictionary, to produce idx = (1, 2, {"Z": 3, "R": 4}. Ugly and unexpected.
+  b. Keep using the one-key dictionary strategy to produce (1, {"Z": 3}, 3, {"R": 4})
+  c. Forbid the notation altogether, like in the case of function calls.
+
+Solution c is the most consistent with the behavior of python and keyword
+arguments, and so should be preferred.
 
 
-
-
-
-
-
-These operations is handled by __getitem__(self, y). This
-methods performs as follows with the three accepted notations for an
-indexing operation:
-
-- When a single element is passed, e.g. a[2], the y argument will be 2.
-- When multiple elements are passed, they must be separated by commas: a[2,3].
-  In this case, y will be a tuple (2,3). Calling a[2,3,"hello",{}] 
-  will give (2,3,"hello",{}) for the value of y.
-
-In both cases, the indexing operation can also accept a slicing notation to
-define intervals, with or without step. Examples of such notations are a[1:10]
-and a[1:10:2]. The y argument of __getitem__ will be a slice object, or a tuple
-containing slice objects if multiple values were passed.
-
-Except for its ability to handle slices, The indexing operation has similarities to
-a plain method call: it acts like one when invoked with only one element, but
-if the number of elements is greater than one, the __getitem__ argument behaves
-like *args.
-
-I would propose to add the possibility for a[Z=3], where y would then be a
-dictionary {"Z": 3}. In the case of a[1:3, 4, Z=3, R=5], the value of y would
-be a tuple containing (slice(1,3,None), 4, {"Z": 3}, {"R": 5}). This allows to
-preserve the ordering as specified (e.g. a[Z=3, R=4] vs a[R=4, Z=3]).
-
-
-The problem with this is, as you note below, that everything between [ 
-and ] is turned into a single object passed on to __getitem__. That 
-includes slice notation I:J:I, which is currently only valid in this 
-context. Syntactically, collection indexing is quite different from 
-function calling. (Python could have been defined so that they were the 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-------------------------------------------
+a dictionary 
 
 The keyword would be keywords-only because right now when many arguments 
 are passed to __getitem__, they are grouped in a tuple and this tuple is 
@@ -182,19 +202,6 @@ separated from a default, say with ;.
 I believe any proposal along this line would make dict.getitem obsolete, 
 and eliminate any call for list.getitem.
 
-> Default value is not the only use case. One could for example define a
-> subclass of list computing an interpolation if a float is given as a
-> parameter instead of truncating it, and the keword argument would define
-> which kind of interpolation (nearest, linear, spline...).
-
-I think interp should be a method of the subclass.
-
-> Or it could
-> define if the value returned are in degrees or radians. (Yes, I have a
-> scientific background.)
-
-.setunit('degrees') with radians the default.
-
 > I use something similar for a dictionary-like interface where the keys
 > are strings and only numbers are stored. The second argument, if given,
 > is the default:
@@ -238,16 +245,10 @@ of opinion! :)
 
 ChrisA
 
-
-
-I tend to see square brackets as a function call but "indexing 
-oriented". Using parenthesis would correspond to calling __call__ while 
-using brackets corresponds to calling __getitem__. And sometimes I'd 
-like to be able to use I:J:K notation for slices in function calls...
-
->
 > Part of the point of except expressions was that the implementation of
-> __getitem__ wouldn't need to have two branches in it. Currently, you
+> __getitem__ wouldn't need to have two branches in it.
+
+> Currently, you
 > need to write __getitem__ (which raises an exception on finding a
 > problem) plus something else, eg get(), which returns a default
 > instead. By your proposal, both branches would go inside __getitem__,
@@ -255,9 +256,6 @@ like to be able to use I:J:K notation for slices in function calls...
 > branches. That's two branches that need to be written, tested, etc,
 > and if the author hasn't thought to handle default=, there's no way to
 > get that functionality, same as if there's no get() method.
-
-Yes the code would be included by the author rather than by the user. 
-Part of the success of python is that it comes with batteries included !
 
 > And just
 > as with the get method, there'll be an ad-hoc and fairly arbitrary
@@ -280,12 +278,11 @@ setitem and delitem don't look like function calls at all IMHO. Keywords
 arguments for them would be less useful than for getitem.
 
 References
+==========
 
 http://article.gmane.org/gmane.comp.python.ideas/27584
 https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 
-Using an indexing operation instead of a method clearly implies access to a
-subset of a larger dataset.
 
 Copyright
 =========
