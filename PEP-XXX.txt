@@ -2,16 +2,14 @@ PEP: XXX
 Title: Support for indexing with keyword arguments.
 Version: $Revision: 41421 $
 Last-Modified: $Date: 2005-11-10 06:42:20 -0800 (Thu, 10 Nov 2005) $
-Author: Joseph Martinot-Lagarde <joseph.martinot-lagarde@...>
-        Stefano Borini <stefano.borini@gmail.com>
+Author: Joseph Martinot-Lagarde <joseph.martinot-lagarde@...>, Stefano Borini <stefano.borini@gmail.com>
 Discussion-To: python-ideas@python.org
 Status: Draft
 Type: Standards Track
 Content-Type: text/x-rst
 Created: 24-Jun-2014
 Python-Version: 3.6
-Post-History: 30-Aug-2002
-
+Post-History: 
 
 Abstract
 ========
@@ -24,57 +22,70 @@ legal syntax. In addition to a change in the parser, the index protocol
 Motivation
 ==========
 
-Using an indexing operation instead of a method clearly implies access to a
-subset of a larger dataset.
+The current syntax of the indexing operation provides the following 
+strategies for access 
 
-How the notation is interpreted is up to the implementing class. For example,
-a class could take advantage of a "default" key to set a default return value when
-the index is not present
+   >>> a[3]       # returns the third element of a
+   >>> a[1:10:2]  # slice notation (extract a subset of the data)
+   >>> a[3,2]     # multiple indexes (e.g. for multidimensional arrays)
 
- >>> lst = [1, 2, 3]
- >>> value = lst[3]
- >>> value = lst[3, default=0]  # value is 0
+The additional notation proposed in this PEP would allow notations involving
+keyword arguments in the indexing operation, e.g.
 
-Another use case would be to specify an interpolation strategy for a sparse
-array:
+   >>> a[K=3]
+   >>> a[3,R=3,K=4]
 
- >>> value = array[1, 3, interpolate="spline"]
+We present the following practical use cases for this notation. 
 
-The keword argument would specify which kind of interpolation 
-strategy to use to infer point 1,3 from the rest of the data.
+1. In some contexts, such as computational physics and chemistry, the use of a
+notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
+a level of accuracy
 
-It would also allow to define a unit 
+  >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
- >>> value = array[1, 3, unit="degrees"]
+2. To provide additional context to the indexing
 
-In some contexts, such as computational physics and chemistry, the use of a
-notation such as Basis[Z=5] can be used to represent strategies for accuracy.
+  >>> gridValues[x=3, y=5, z=8]
+  >>> rain[time=0:12, location=location]
 
- >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
+The same notation can be used for non-indexing operations, such as the following
 
-Additional context may equally enjoy a clear specification of the keys in each
-field during an indexing operation, such as 
+3. a class could take advantage of a "default" key to set a default return
+value when the index is not present
 
- >>> gridValues[x=3, y=5, z=8]
- >>> rain[time=0:12, location=location]
+  >>> lst = [1, 2, 3]
+  >>> value = lst[5, default=0]  # value is 0
+
+4. For a sparse dataset, an interpolation strategy could be passed
+as keyword argument. to infer point 1,3 from the rest of the data.
+
+ >>> value = array[1, 3, interpolate=spline_interpolator]
+
+5. A unit could be specified with the same mechanism
+
+  >>> value = array[1, 3, unit="degrees"]
 
 
 
 
-------------------------------------------
 
-The keyword would be keywords-only because right now when many arguments 
-are passed to __getitem__, they are grouped in a tuple and this tuple is 
-passed to __getitem__ as a unique argument. Also it is more clear: 
-ordered arguments are the indexes, keyword arguments are the options.
 
-To be perfectly honest I don't think that this proposal is that great, 
-it's main selling point is that a "default" keyword in indexing would be 
-a good alternative for some of the problems raised in PEP 463.
 
-========================
 
-The current indexing operation is handled by __getitem__(self, y). This
+
+
+How the notation is interpreted is up to the implementing class. 
+
+
+
+
+
+
+
+
+
+
+These operations is handled by __getitem__(self, y). This
 methods performs as follows with the three accepted notations for an
 indexing operation:
 
@@ -99,6 +110,42 @@ be a tuple containing (slice(1,3,None), 4, {"Z": 3}, {"R": 5}). This allows to
 preserve the ordering as specified (e.g. a[Z=3, R=4] vs a[R=4, Z=3]).
 
 
+The problem with this is, as you note below, that everything between [ 
+and ] is turned into a single object passed on to __getitem__. That 
+includes slice notation I:J:I, which is currently only valid in this 
+context. Syntactically, collection indexing is quite different from 
+function calling. (Python could have been defined so that they were the 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------
+
+The keyword would be keywords-only because right now when many arguments 
+are passed to __getitem__, they are grouped in a tuple and this tuple is 
+passed to __getitem__ as a unique argument. Also it is more clear: 
+ordered arguments are the indexes, keyword arguments are the options.
+
+To be perfectly honest I don't think that this proposal is that great, 
+it's main selling point is that a "default" keyword in indexing would be 
+a good alternative for some of the problems raised in PEP 463.
+
+========================
+
+
 Ian Cordasco:
     And the same would be true of your proposed feature for __getitem__
     because all keyword arguments would be collected into one dictionary.
@@ -115,7 +162,8 @@ a[1,{"k": 2}], which may be indended. What about a[1,{"k":2, "r":3}] then?
 Alternate approaches
 ====================
 
-The first obvious alternate approach is to keep the indexing as is, and use a
+The first obvious alternate approach is not to introduce this extension,
+to keep the indexing as is, and use a
 traditional function call. This is certainly a possible approach, but it would
 lose the ordering information of the entries. PEP-468 tries to address this.
 Another shortcoming is that a mixed situation requiring a slice would result
@@ -127,12 +175,6 @@ more awkward. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
 
 
 ----------------------------------------
-
-The problem with this is, as you note below, that everything between [ 
-and ] is turned into a single object passed on to __getitem__. That 
-includes slice notation I:J:I, which is currently only valid in this 
-context. Syntactically, collection indexing is quite different from 
-function calling. (Python could have been defined so that they were the 
 same.) I think it would be better if the key were syntactically 
 separated from a default, say with ;.
    value = lst[3; 0]
@@ -242,6 +284,8 @@ References
 http://article.gmane.org/gmane.comp.python.ideas/27584
 https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 
+Using an indexing operation instead of a method clearly implies access to a
+subset of a larger dataset.
 
 Copyright
 =========
