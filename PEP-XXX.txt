@@ -96,32 +96,109 @@ has similarities to a plain method call: it acts like one when invoked with
 only one element; If the number of elements is greater than one, the
 idx argument behaves like a *args. However, an indexing operation has the
 strong semantic implication of extraction of a subset out of a larger set,
-which is not present in a regular method call.
-
-   - In the "Current Implementation" part when you're talking about
-   function calls, you could add that having a visually different indexing is
-   important for readability. As I said on python-ideas, Matlab doesn't have
-   this difference and it's a mess (even more in dynamic languages where the
-   type of a variable can change anywhere)
+which is not present in a regular method call, and its different visual style
+is important for readability.
 
 Specifications
 ==============
 
-To include the possibility for keyword expressions such as a[Z=3] while keeping
-compatibility, the implementation should try to preserve the current signature
-for __getitem__. The possible cases that need to be addressed are the following:
+The implementation should try to preserve the current signature for
+__getitem__, or modify it in a backward-compatible way. We will present
+different alternatives, keeping into account the possible cases that need
+to be addressed
 
-1. a[Z=3]       
-2. a[Z=3, R=2]
-3. a[1, Z=3]
-4. a[1, Z=3, R=2]
-5. a[1, 2, Z=3]
-6. a[1, 2, Z=3, R=4]
-7. a[1, Z=3, 2, R=4]
+        C0. Traditional indexing
+	C1. a[Z=3] 
+	C2. a[Z=3, R=2]
+	C3. a[1, Z=3]
+	C4. a[1, Z=3, R=2]
+	C5. a[1, 2, Z=3]
+	C6. a[1, 2, Z=3, R=4]
+	C7. a[1, Z=3, 2, R=4]
+
+The possible strategies for __getitem__ are:
+
+Strategy 1: 
+Keep the current signature for __getitem__
+
+Strategy 2: kwargs argument
+__getitem__ accepts an optional **kwargs argument which should be keyword only. 
+idx also becomes optional to support a case where no non-keyword arguments are allowed.
+The signature would then be either 
+
+	__getitem__(self, idx) 
+	__getitem__(self, idx, **kwargs), 
+	__getitem__(self, **kwargs) 
+
+This would render point 7 impossible and would be more consistent with
+function calls. It doesn't preserve order, but I admit that I
+don't see the need for it. 
+
+Strategy 3: named tuple
+
+Always return a namedtuple for idx instead of a tuple. 
+Keyword arguments would obviousely have their key as key, and positional
+argument would have an underscore followed by their order:
+
+        C0. a[2]; a[2,3]      -> idx = 3; idx=(_1=2, _2=3)
+	C1. a[Z=3]            -> idx = (Z=3)
+	C2. a[Z=3, R=2]       -> idx = (Z=3, R=2)
+	C3. a[1, Z=3]         -> idx = (_1=1, Z=3) 
+	C4. a[1, Z=3, R=2]    -> idx = (_1=1, Z=3, R=2)
+	C5. a[1, 2, Z=3]      -> idx = (_1=1, _2=2, Z=3)
+	C6. a[1, 2, Z=3, R=4] -> (_1=1, _2=2, Z=3, R=4)
+	C7. a[1, Z=3, 2, R=4] -> (_1=1, Z=3, _2=2, R=4) or
+                                 (_1=1, Z=3, _3=2, R=4) or 
+				 invalid ?
+
+The required typename of the namedtuple could be "Index" or the name of the
+argument in the function definition, it keeps the ordering and is easy to
+analyse by using the _fields attribute. It is backward compatible, provided
+that C0 with more than one entry now passes a namedtuple instead of a plain
+tuple.  It should be faster than creating many one element dictionaries, too.
+
+   - In "Specifications", I don't like the fact that idx would sometimes be
+   a dictionary, sometimes a tuple, and sometimes anything (with a single
+   index). Also I don't like the tuple of one-element dictionnaries, it looks
+   ugly to me (I'm not against it either, it does the job) and would be a
+   mess  to parse. So I have 2 other proposal:
+
+	   -
+
+	   data['key'; 0] is not very obvious and it works only for the
+	default value. Also visually, ";" is not far from ",".
+
+	   - The alternative of using a slice to set default value should be noted,
+	   I find it quite interesting: data['key', 'default':0]. It is not possible
+	   to set a slice as the default, though (I mean using slice notation, it is
+	   always possible to use slice()).
+
+
+
+
+
+
+
+
+
+
+Case 0:
+
+For traditional indexing, __getitem__ should behave as before.
 
 Case 1:
 
-In this case, idx should be a dictionary with a single key {"Z": 3}.
+In this case, different strategies are possible. We will enumerate and name each of
+them.
+
+Strategy "plain dictionary"
+
+idx should be a dictionary with a single key {"Z": 3}.
+
+
+
+
+
 
 Case 2:
 
@@ -170,44 +247,6 @@ it's main selling point is that a "default" keyword in indexing would be
 a good alternative for some of the problems raised in PEP 463.
 
 
-   - In "Specifications", I don't like the fact that idx would sometimes be
-   a dictionary, sometimes a tuple, and sometimes anything (with a single
-   index). Also I don't like the tuple of one-element dictionnaries, it looks
-   ugly to me (I'm not against it either, it does the job) and would be a
-   mess  to parse. So I have 2 other proposal:
-      - Accept another optional argument which should be keyword only. The
-      signature would then be either __getitem__(self, idx) or
-__getitem__(self,
-      idx, **kwargs), and maybe __getitem__(self, **kwargs) for completeness.
-      This would render point 7 impossible and would be more consistent with
-      function calls. It doesn't preserve order, but I admit that I
-don't see the
-      need for it. Do you have any use cases ?
-      - Another way to do it would be to always return a namedtuple instead
-      of a tuple. Keyword arguments would obviousely have their key as key, and
-      positional argument would have an underscore followed by their order:
-
-	1. a[Z=3] -> (Z=3)
-	2. a[Z=3, R=2] -> (Z=3, R=2)
-	6. a[1, 2, Z=3, R=4] -> (_1=1, _2=2, Z=3, R=4)
-
-	7. a[1, Z=3, 2, R=4] -> (_1=1, Z=3, _2=2, R=4) or (_1=1, Z=3, _3=2,
-	R=4) or invalid ?
-	The required typename could be "index" or the name or the argument in
-	the function definition, it keeps the ordering and is easy to analyse
-	by using _fields. It is backward compatible except for the string
-	representation. It should be fasater than creating many one element
-	dictionaries, too.
-
-	   -
-
-	   data['key'; 0] is not very obvious and it works only for the
-	default value. Also visually, ";" is not far from ",".
-
-	   - The alternative of using a slice to set default value should be noted,
-	   I find it quite interesting: data['key', 'default':0]. It is not possible
-	   to set a slice as the default, though (I mean using slice notation, it is
-	   always possible to use slice()).
 
 
 
