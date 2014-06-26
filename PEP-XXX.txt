@@ -94,10 +94,12 @@ object passed to argument idx:
 Except for its unique ability to handle slice notation, the indexing operation
 has similarities to a plain method call: it acts like one when invoked with
 only one element; If the number of elements is greater than one, the
-idx argument behaves like a *args. However, an indexing operation has the
-strong semantic implication of extraction of a subset out of a larger set,
-which is not present in a regular method call, and its different visual style
-is important for readability.
+idx argument behaves like a *args. 
+
+However, an indexing operation has the strong semantic implication of
+extraction of a subset out of a larger set, which is not present in a regular
+method call, and its different visual style is important for readability.
+
 
 Specifications
 ==============
@@ -269,9 +271,10 @@ lose the ordering information of the entries. PEP-468 tries to address this.
 Another shortcoming is that a mixed situation requiring a slice would result
 more awkward. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
 
+(Of course I could use a get method for this purpose, but bracket for
+> indexing seems always more clear).
 
-
-
+Would make dict.get obsolete.
 
 
 ----------------------------------------
@@ -282,26 +285,12 @@ separated from a default, say with ;.
 I believe any proposal along this line would make dict.getitem obsolete, 
 and eliminate any call for list.getitem.
 
-> I use something similar for a dictionary-like interface where the keys
-> are strings and only numbers are stored. The second argument, if given,
-> is the default:
->  >>> data["key", 0]
-> It would be clearer to use:
->  >>> data["key", default=0]
 
 I see data['key'; 0] as an in between compromise. The 0 is separated 
 from the key but without the heavy 'default='.
 
-> (Of course I could use a get method for this purpose, but bracket for
-> indexing seems always more clear).
-
 
 -------------------------------
-
-
-An interesting idea, but that looks far too much like a function call.
-Square brackets and then more and more a function call inside... may
-fail the grit test.
 
 Part of the point of except expressions was that the implementation of
 __getitem__ wouldn't need to have two branches in it. Currently, you
