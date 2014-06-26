@@ -107,7 +107,7 @@ __getitem__, or modify it in a backward-compatible way. We will present
 different alternatives, keeping into account the possible cases that need
 to be addressed
 
-        C0. Traditional indexing
+        C0. a[3]; a[3,2] (Traditional indexing)
 	C1. a[Z=3] 
 	C2. a[Z=3, R=2]
 	C3. a[1, Z=3]
@@ -119,9 +119,51 @@ to be addressed
 The possible strategies for __getitem__ are:
 
 Strategy 1: 
-Keep the current signature for __getitem__
+----------------------
+Keep the current signature for __getitem__, and expand the range of variability in
+type and contents of the current idx parameter.
+
+	C0: a[2]        -> idx = 2        # integer
+            a[2,3]      -> idx = (2,3)    # tuple
+        C1: a[Z=3]      -> idx = {"Z": 3} # dictionary with single key
+        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # dictionary with two keys.[1]
+                        or idx = ({"Z": 3}, {"R": 4}) # tuple of two dictionaries, 
+                                                      # each with a single key. [2]
+
+[1] Naturally maps to the traditional **kwargs behavior, however it breaks
+    the convention that two or more entries for the index produce a tuple. 
+[2] preserves the above behavior, and additionally preserves the order. 
+    Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
+
+	C3. a[1, Z=3]   -> idx = (1, {"Z":3}) 
+
+Case 4,5,6:
+
+As in case a[1, Z=3, R=2] two possible implementations exist
+  a. idx becomes the two-values tuple (1, {"Z":3, "R": 4})
+  b. idx becomes the three values tuple (1, {"Z": 3}, {"R": 4})
+
+
+Case 7:
+
+There are three possible choices for case 7:
+  a. Pack all keyword arguments in the dictionary, to produce idx = (1, 2, {"Z": 3, "R": 4}. Ugly and unexpected.
+  b. Keep using the one-key dictionary strategy to produce (1, {"Z": 3}, 3, {"R": 4})
+  c. Forbid the notation altogether, like in the case of function calls.
+
+Solution c is the most consistent with the behavior of python and keyword
+arguments, and so should be preferred.
+
+ Alter the 
+   - In "Specifications", I don't like the fact that idx would sometimes be
+   a dictionary, sometimes a tuple, and sometimes anything (with a single
+   index). Also I don't like the tuple of one-element dictionnaries, it looks
+   ugly to me (I'm not against it either, it does the job) and would be a
+   mess  to parse. So I have 2 other proposal:
+
 
 Strategy 2: kwargs argument
+---------------------------
 __getitem__ accepts an optional **kwargs argument which should be keyword only. 
 idx also becomes optional to support a case where no non-keyword arguments are allowed.
 The signature would then be either 
@@ -135,6 +177,7 @@ function calls. It doesn't preserve order, but I admit that I
 don't see the need for it. 
 
 Strategy 3: named tuple
+-----------------------
 
 Always return a namedtuple for idx instead of a tuple. 
 Keyword arguments would obviousely have their key as key, and positional
@@ -157,11 +200,6 @@ analyse by using the _fields attribute. It is backward compatible, provided
 that C0 with more than one entry now passes a namedtuple instead of a plain
 tuple.  It should be faster than creating many one element dictionaries, too.
 
-   - In "Specifications", I don't like the fact that idx would sometimes be
-   a dictionary, sometimes a tuple, and sometimes anything (with a single
-   index). Also I don't like the tuple of one-element dictionnaries, it looks
-   ugly to me (I'm not against it either, it does the job) and would be a
-   mess  to parse. So I have 2 other proposal:
 
 	   -
 
@@ -177,62 +215,6 @@ tuple.  It should be faster than creating many one element dictionaries, too.
 
 
 
-
-
-
-
-
-Case 0:
-
-For traditional indexing, __getitem__ should behave as before.
-
-Case 1:
-
-In this case, different strategies are possible. We will enumerate and name each of
-them.
-
-Strategy "plain dictionary"
-
-idx should be a dictionary with a single key {"Z": 3}.
-
-
-
-
-
-
-Case 2:
-
-For a[Z=3, R=4], the situation is less trivial. There are two immediate options:
-
-  a. idx becomes a dictionary {"Z": 3, "R": 4}, or
-  b. idx becomes a tuple of two dictionaries, each with a single key
-    ({"Z": 3}, {"R": 4})
-
-option a naturally maps to the traditional **kwargs behavior, however it breaks
-the convention that two or more entries for the index produce a tuple. Option b
-preserves this behavior, and additionally preserves the order. Preserving the order
-is also possible if an OrderedDict is used, as drafted by PEP-468.
-
-Case 3:
-
-The case a[1, Z=3] should produce a tuple (1, {"Z":3})
-
-Case 4,5,6:
-
-As in case a[1, Z=3, R=2] two possible implementations exist
-  a. idx becomes the two-values tuple (1, {"Z":3, "R": 4})
-  b. idx becomes the three values tuple (1, {"Z": 3}, {"R": 4})
-
-
-Case 7:
-
-There are three possible choices for case 7:
-  a. Pack all keyword arguments in the dictionary, to produce idx = (1, 2, {"Z": 3, "R": 4}. Ugly and unexpected.
-  b. Keep using the one-key dictionary strategy to produce (1, {"Z": 3}, 3, {"R": 4})
-  c. Forbid the notation altogether, like in the case of function calls.
-
-Solution c is the most consistent with the behavior of python and keyword
-arguments, and so should be preferred.
 
 
 a dictionary 
