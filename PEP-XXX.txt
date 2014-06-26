@@ -98,6 +98,12 @@ idx argument behaves like a *args. However, an indexing operation has the
 strong semantic implication of extraction of a subset out of a larger set,
 which is not present in a regular method call.
 
+   - In the "Current Implementation" part when you're talking about
+   function calls, you could add that having a visually different indexing is
+   important for readability. As I said on python-ideas, Matlab doesn't have
+   this difference and it's a mess (even more in dynamic languages where the
+   type of a variable can change anywhere)
+
 Specifications
 ==============
 
@@ -162,6 +168,50 @@ ordered arguments are the indexes, keyword arguments are the options.
 To be perfectly honest I don't think that this proposal is that great, 
 it's main selling point is that a "default" keyword in indexing would be 
 a good alternative for some of the problems raised in PEP 463.
+
+
+   - In "Specifications", I don't like the fact that idx would sometimes be
+   a dictionary, sometimes a tuple, and sometimes anything (with a single
+   index). Also I don't like the tuple of one-element dictionnaries, it looks
+   ugly to me (I'm not against it either, it does the job) and would be a
+   mess  to parse. So I have 2 other proposal:
+      - Accept another optional argument which should be keyword only. The
+      signature would then be either __getitem__(self, idx) or
+__getitem__(self,
+      idx, **kwargs), and maybe __getitem__(self, **kwargs) for completeness.
+      This would render point 7 impossible and would be more consistent with
+      function calls. It doesn't preserve order, but I admit that I
+don't see the
+      need for it. Do you have any use cases ?
+      - Another way to do it would be to always return a namedtuple instead
+      of a tuple. Keyword arguments would obviousely have their key as key, and
+      positional argument would have an underscore followed by their order:
+
+	1. a[Z=3] -> (Z=3)
+	2. a[Z=3, R=2] -> (Z=3, R=2)
+	6. a[1, 2, Z=3, R=4] -> (_1=1, _2=2, Z=3, R=4)
+
+	7. a[1, Z=3, 2, R=4] -> (_1=1, Z=3, _2=2, R=4) or (_1=1, Z=3, _3=2,
+	R=4) or invalid ?
+	The required typename could be "index" or the name or the argument in
+	the function definition, it keeps the ordering and is easy to analyse
+	by using _fields. It is backward compatible except for the string
+	representation. It should be fasater than creating many one element
+	dictionaries, too.
+
+	   -
+
+	   data['key'; 0] is not very obvious and it works only for the
+	default value. Also visually, ";" is not far from ",".
+
+	   - The alternative of using a slice to set default value should be noted,
+	   I find it quite interesting: data['key', 'default':0]. It is not possible
+	   to set a slice as the default, though (I mean using slice notation, it is
+	   always possible to use slice()).
+
+
+
+
 
 ========================
 
@@ -276,6 +326,7 @@ function call.
 
 setitem and delitem don't look like function calls at all IMHO. Keywords 
 arguments for them would be less useful than for getitem.
+
 
 References
 ==========
