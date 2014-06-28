@@ -2,7 +2,7 @@ PEP: XXX
 Title: Support for indexing with keyword arguments.
 Version: $Revision: 41421 $
 Last-Modified: $Date: 2005-11-10 06:42:20 -0800 (Thu, 10 Nov 2005) $
-Author: Joseph Martinot-Lagarde <joseph.martinot-lagarde@...>, Stefano Borini <stefano.borini@gmail.com>
+Author: Joseph Martinot-Lagarde <joseph.martinot-lagarde@...>, Stefano Borini <stefano.borini@...>
 Discussion-To: python-ideas@python.org
 Status: Draft
 Type: Standards Track
@@ -15,7 +15,7 @@ Abstract
 ========
 
 This PEP proposes an extension of the indexing operation to support keyword
-arguments.  Notations in the form a[k=3], or a[1:2, k=3, r=5] would become
+arguments.  Notations in the form a[K=3], or a[1:2, K=3, R=4] would become
 legal syntax. In addition to a change in the parser, the index protocol
 (__getitem__, __setitem__ and __delitem__) will also require adaptation. 
 
@@ -27,7 +27,7 @@ strategies for access
 
    >>> a[3]       # returns the third element of a
    >>> a[1:10:2]  # slice notation (extract a subset of the data)
-   >>> a[3,2]     # multiple indexes (e.g. for multidimensional arrays)
+   >>> a[3,2]     # multiple indexes (for multidimensional arrays)
 
 The additional notation proposed in this PEP would allow notations involving
 keyword arguments in the indexing operation, e.g.
@@ -122,8 +122,10 @@ The possible strategies for __getitem__ are:
 
 Strategy 1: 
 ----------------------
-Keep the current signature for __getitem__, and expand the range of variability in
-type and contents of the current idx parameter.
+In the current implementation, when many arguments are passed to __getitem__,
+they are grouped in a tuple and this tuple is passed to __getitem__ as the 
+single argument idx. This strategy keeps the current signature, but expands the
+range of variability in type and contents of idx.
 
 	C0: a[1]        -> idx = 1        # integer
             a[1,2]      -> idx = (1,2)    # tuple
@@ -147,18 +149,22 @@ type and contents of the current idx parameter.
 		              or idx = (1, {"Z": 3}, 3, {"R": 4}) # Keep using the one-key dict strategy 
                               or raise SyntaxError, like in the case of function calls.
 
-Plus:  Signature is unchanged; 
-       Can preserve ordering of keyword arguments as specified at indexing;
-       Stays within traditional types: tuples and dicts;
-       Some proposed strategies are similar in behavior to a traditional function call;
+Pros: Signature is unchanged; 
+      Can preserve ordering of keyword arguments as specified at indexing;
+      Stays within traditional types: tuples and dicts;
+      Some proposed strategies are similar in behavior to a traditional function call;
 
-Minus: Complex and wasteful; 
-       idx type and layout can change depending on the whims of the caller;
-       May be complex to parse what is passed;
-       Creates a lot of single keys dictionary as members of a tuple. Looks ugly;
+Cons: Complex and wasteful; 
+      idx type and layout can change depending on the whims of the caller;
+      May be complex to parse what is passed;
+      Creates a lot of single keys dictionary as members of a tuple. Looks ugly;
+      Having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
+      a[1,{"k": 2}], which may or may not be indended. 
+
 
 Strategy 2: kwargs argument
 ---------------------------
+
 __getitem__ accepts an optional **kwargs argument which should be keyword only. 
 idx also becomes optional to support a case where no non-keyword arguments are allowed.
 The signature would then be either 
@@ -167,9 +173,22 @@ The signature would then be either
 	__getitem__(self, idx, **kwargs), 
 	__getitem__(self, **kwargs) 
 
-This would render point 7 impossible and would be more consistent with
-function calls. It doesn't preserve order, but I admit that I
-don't see the need for it. 
+Applied to our cases would produce:
+
+        C0. a[1,2]            -> idx=(1,2); kwargs={}
+	C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
+	C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
+	C3. a[1, Z=3]         -> idx=1    ;  kwargs={"Z":3}
+	C4. a[1, Z=3, R=4]    -> idx=1    ;  kwargs={"Z":3, "R":4} 
+	C5. a[1, 2, Z=3]      -> idx=(1,2);  kwargs={"Z":3}
+	C6. a[1, 2, Z=3, R=4] -> idx=(1,2);  kwargs={"Z":3, "R":4}
+	C7. a[1, Z=3, 2, R=4] -> forbidden in agreement to function behavior
+
+Empty indexing a[] of course remains invalid syntax.
+
+Pros: Similar to function call, evolves naturally from it.
+Cons: It doesn't preserve order, unless an OrderedDict is used.
+      Forbids C7, but is it really needed?
 
 Strategy 3: named tuple
 -----------------------
@@ -195,157 +214,54 @@ analyse by using the _fields attribute. It is backward compatible, provided
 that C0 with more than one entry now passes a namedtuple instead of a plain
 tuple.  It should be faster than creating many one element dictionaries, too.
 
-Plus:  Looks really nice. namedtuple transparently replaces tuple and gracefully
-       degrades to the old behavior.
+Pros: Looks really nice. namedtuple transparently replaces tuple and gracefully
+      degrades to the old behavior.
 
-Minus: According to some sources (Ref 3) namedtuple is not well developed.
-       To include it as such important object would probably require rework
-       and improvement;
-       The namedtuple fields, and thus the type, will have to change according
-       to the passed arguments. This can be a performance bottleneck, and makes
-       it impossible to guarantee that two subsequent index accesses get the same
-       Index class;
-       the _n "magic" fields are a bit unusual.
-       
-       
+Cons: According to some sources (Ref 3) namedtuple is not well developed.
+      To include it as such important object would probably require rework
+      and improvement;
+      The namedtuple fields, and thus the type, will have to change according
+      to the passed arguments. This can be a performance bottleneck, and makes
+      it impossible to guarantee that two subsequent index accesses get the same
+      Index class;
+      the _n "magic" fields are a bit unusual, but ipython already uses them
+      for result history.
 
+Objections and Considerations
+=============================
 
+The first obvious objection to this PEP contents is that this extension
+is not needed. One could keep the indexing as is, and use a traditional
+get() method for those cases where basic indexing is not enough. This
+is a good point, but as already reported in the introduction, methods have a
+different semantic weight from indexing, and you can't use slices directly
+in methods. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
 
+Relative to Strategy 1, a comment from Ian Cordasco points out that "it would
+be unreasonable for just one method to behave totally differently from the
+standard behaviour in Python.  It would be confusing for only __getitem__ (and
+ostensibly, __setitem__) to take keyword arguments but instead of turning them
+into a dictionary, turn them into individual single-item dictionaries." We
+agree with his point, however it must be pointed out that __getitem__ is
+already special in some regards when it comes to passed arguments.
 
-	   -
+Introducing a "default" keyword would make dict.get() obsolete, which could be
+replaced by d["key", default=3]. Chris Angelico however states: "Currently,
+you need to write __getitem__ (which raises an exception on finding a problem)
+plus something else, eg get(), which returns a default instead. By your
+proposal, both branches would go inside __getitem__, which means they could
+share code; but there still need to be two branches." 
 
-	   data['key'; 0] is not very obvious and it works only for the
-	default value. Also visually, ";" is not far from ",".
+Additionally, Chris continues: "There'll be an ad-hoc and fairly arbitrary
+puddle of names (some will go "default=", others will say that's way too long
+and go "def=", except that that's a keyword so they'll use "dflt=" or
+something...), unless there's a strong force pushing people to one consistent
+name.". This argument is valid but it's valid for any function call.
 
-	   - The alternative of using a slice to set default value should be noted,
-	   I find it quite interesting: data['key', 'default':0]. It is not possible
-	   to set a slice as the default, though (I mean using slice notation, it is
-	   always possible to use slice()).
-
-
-
-
-
-
-
-a dictionary 
-
-The keyword would be keywords-only because right now when many arguments 
-are passed to __getitem__, they are grouped in a tuple and this tuple is 
-passed to __getitem__ as a unique argument. Also it is more clear: 
-ordered arguments are the indexes, keyword arguments are the options.
-
-To be perfectly honest I don't think that this proposal is that great, 
-it's main selling point is that a "default" keyword in indexing would be 
-a good alternative for some of the problems raised in PEP 463.
-
-
-
-
-
-
-
-========================
-
-
-Ian Cordasco:
-    And the same would be true of your proposed feature for __getitem__
-    because all keyword arguments would be collected into one dictionary.
-    It would be unreasonable for just one method to behave totally
-    differently from the standard behaviour in Python. It would be
-    confusing for only __getitem__ (and ostensibly, __setitem__) to take
-    keyword arguments but instead of turning them into a dictionary, turn
-    them into individual single-item dictionaries.
-
-
-Note: having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
-a[1,{"k": 2}], which may be indended. What about a[1,{"k":2, "r":3}] then? 
-
-Alternate approaches
-====================
-
-The first obvious alternate approach is not to introduce this extension,
-to keep the indexing as is, and use a
-traditional function call. This is certainly a possible approach, but it would
-lose the ordering information of the entries. PEP-468 tries to address this.
-Another shortcoming is that a mixed situation requiring a slice would result
-more awkward. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
-
-(Of course I could use a get method for this purpose, but bracket for
-> indexing seems always more clear).
-
-Would make dict.get obsolete.
-
-
-----------------------------------------
-same.) I think it would be better if the key were syntactically 
-separated from a default, say with ;.
-   value = lst[3; 0]
-
-I believe any proposal along this line would make dict.getitem obsolete, 
-and eliminate any call for list.getitem.
-
-
-I see data['key'; 0] as an in between compromise. The 0 is separated 
-from the key but without the heavy 'default='.
-
-
--------------------------------
-
-Part of the point of except expressions was that the implementation of
-__getitem__ wouldn't need to have two branches in it. Currently, you
-need to write __getitem__ (which raises an exception on finding a
-problem) plus something else, eg get(), which returns a default
-instead. By your proposal, both branches would go inside __getitem__,
-which means they could share code; but there still need to be two
-branches. That's two branches that need to be written, tested, etc,
-and if the author hasn't thought to handle default=, there's no way to
-get that functionality, same as if there's no get() method. And just
-as with the get method, there'll be an ad-hoc and fairly arbitrary
-puddle of names (some will go "default=", others will say that's way
-too long and go "def=", except that that's a keyword so they'll use
-"dflt=" or something...), unless there's a strong force pushing people
-to one consistent name. Terry's suggestion solves that part of it, but
-also restricts the feature to just default values; with a more general
-keyword argument system, it would make sense to also use this with
-__setitem__ and __delitem__, and I'm not sure how "default value"
-should be interpreted there. Which is better is, of course, a matter
-of opinion! :)
-
-ChrisA
-
-> Part of the point of except expressions was that the implementation of
-> __getitem__ wouldn't need to have two branches in it.
-
-> Currently, you
-> need to write __getitem__ (which raises an exception on finding a
-> problem) plus something else, eg get(), which returns a default
-> instead. By your proposal, both branches would go inside __getitem__,
-> which means they could share code; but there still need to be two
-> branches. That's two branches that need to be written, tested, etc,
-> and if the author hasn't thought to handle default=, there's no way to
-> get that functionality, same as if there's no get() method.
-
-> And just
-> as with the get method, there'll be an ad-hoc and fairly arbitrary
-> puddle of names (some will go "default=", others will say that's way
-> too long and go "def=", except that that's a keyword so they'll use
-> "dflt=" or something...), unless there's a strong force pushing people
-> to one consistent name.
-
-Well, this argument would hold against using keywords arguments in any 
-function call.
-
-> Terry's suggestion solves that part of it, but
-> also restricts the feature to just default values; with a more general
-> keyword argument system, it would make sense to also use this with
-> __setitem__ and __delitem__, and I'm not sure how "default value"
-> should be interpreted there. Which is better is, of course, a matter
-> of opinion! :)
-
-setitem and delitem don't look like function calls at all IMHO. Keywords 
-arguments for them would be less useful than for getitem.
-
+Finally, as part of the discussion of this PEP, it's important to decide if the
+ordering information of the keyword arguments is important, and if indexes and keys
+can be ordered in an arbitrary way (e.g. a[1,Z=3,2,R=4]). PEP-468 tries to
+address the first point by proposing the use of an ordereddict.
 
 References
 ==========
@@ -353,8 +269,6 @@ References
 [1] http://article.gmane.org/gmane.comp.python.ideas/27584
 [2] https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 [3] https://mail.python.org/pipermail/python-ideas/2013-June/021257.html
-
-
 
 Copyright
 =========
