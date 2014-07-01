@@ -9,7 +9,7 @@ Type: Standards Track
 Content-Type: text/x-rst
 Created: 24-Jun-2014
 Python-Version: 3.6
-Post-History: 
+Post-History: 02-Jul-2014
 
 Abstract
 ========
@@ -88,7 +88,7 @@ object passed to argument idx:
     - When multiple elements are passed, they must be separated by commas: a[2,3].
       In this case, idx will be a tuple (2,3). With a[2,3,"hello",{}] 
       idx will be (2,3,"hello",{}).
-    - A slicing notation e.g. a{2:10] will produce a slice object, or a tuple
+    - A slicing notation e.g. a[2:10] will produce a slice object, or a tuple
       containing slice objects if multiple values were passed.
 
 Except for its unique ability to handle slice notation, the indexing operation
@@ -130,13 +130,13 @@ range of variability in type and contents of idx.
 	C0: a[1]        -> idx = 1        # integer
             a[1,2]      -> idx = (1,2)    # tuple
         C1: a[Z=3]      -> idx = {"Z": 3} # dictionary with single key
-        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # dictionary/ordereddict [1]
-                        or idx = ({"Z": 3}, {"R": 4}) # tuple of two single-key dict [2]
+        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # dictionary/ordereddict [*]
+                        or idx = ({"Z": 3}, {"R": 4}) # tuple of two single-key dict [**]
 
-[1] Naturally maps to the traditional **kwargs behavior, however it breaks
+[*] Naturally maps to the traditional **kwargs behavior, however it breaks
     the convention that two or more entries for the index produce a tuple. 
-[2] preserves the above behavior, and additionally preserves the order. 
-    Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
+[**] preserves the above behavior, and additionally preserves the order. 
+     Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
 
 	C3. a[1, Z=3]   -> idx = (1, {"Z":3})     # tuple of two elements, 
 	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})
