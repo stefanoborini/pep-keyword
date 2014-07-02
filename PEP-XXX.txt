@@ -289,10 +289,15 @@ Cons:
 C interface
 ===========
 
-The C interface would have to change to allow the new feature. Specifically,
-modifications would potentially be required to PyObject_GetItem and related.
-The change in interface will be characterized after settling the pure python
-interface first, and therefore remains an open point of this PEP. 
+Depending on the decision for the Python interface, the C interface would 
+potentially have to change to allow the new feature. Specifically,
+PyObject_GetItem and related routines would have to accept an additional 
+PyObject *kw argument for Strategy 2. The remaining strategies would not
+require a change in the C function signatures, but the different nature of the
+passed object would potentially require adaptation. 
+Strategy 3 (namedtuple) implementation would behave correctly as the class
+returned by the factory method in collections returns a subclass of tuple,
+meaning that PyTuple_* functions can handle the resulting object.
 
 Alternative Strategies
 ======================
