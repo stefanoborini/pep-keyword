@@ -25,7 +25,7 @@ Motivation
 The current syntax of the indexing operation provides the following 
 strategies for access 
 
-   >>> a[3]       # returns the third element of a
+   >>> a[3]       # returns the fourth element of a
    >>> a[1:10:2]  # slice notation (extract a subset of the data)
    >>> a[3,2]     # multiple indexes (for multidimensional arrays)
 
@@ -46,7 +46,11 @@ a level of accuracy
   >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
 In this case, the index operation would return a basis set at the chosen level
-of accuracy (represented by the parameter Z)
+of accuracy (represented by the parameter Z). The reason behind an indexing is that
+the BasisSet object could be internally represented as a numeric table, where
+rows are associated to individual elements (e.g. row 0:5 to element 1, 
+row 5:8 to element 2) and each column is associated to a given degree of accuracy
+(e.g. first column is low accuracy, second column is medium accuracy etc).
 
 2. To provide a more communicative meaning to the index, preventing e.g. accidental
    inversion of indexes
@@ -85,9 +89,9 @@ Traditionally, the full content between square brackets is turned into a single
 object passed to argument idx:
 
     - When a single element is passed, e.g. a[2], idx will be 2.
-    - When multiple elements are passed, they must be separated by commas: a[2,3].
-      In this case, idx will be a tuple (2,3). With a[2,3,"hello",{}] 
-      idx will be (2,3,"hello",{}).
+    - When multiple elements are passed, they must be separated by commas: a[2, 3].
+      In this case, idx will be a tuple (2, 3). With a[2, 3, "hello", {}] 
+      idx will be (2, 3, "hello",{}).
     - A slicing notation e.g. a[2:10] will produce a slice object, or a tuple
       containing slice objects if multiple values were passed.
 
@@ -99,7 +103,6 @@ idx argument behaves like a *args.
 However, an indexing operation has the strong semantic implication of
 extraction of a subset out of a larger set, which is not present in a regular
 method call, and its different visual style is important for readability.
-
 
 Specifications
 ==============
@@ -168,11 +171,11 @@ dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, val
 		              or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
 
 Pros: 
-    + Signature is unchanged; 
-    + P2/P3 can preserve ordering of keyword arguments as specified at indexing, 
-    + P1 needs an ordereddict, but would destroy interposed ordering if allowed;
-    + Stays within traditional types: tuples and dicts. Evt. OrderedDict;
-    + Some proposed strategies are similar in behavior to a traditional function call;
+    - Signature is unchanged; 
+    - P2/P3 can preserve ordering of keyword arguments as specified at indexing, 
+    - P1 needs an ordereddict, but would destroy interposed ordering if allowed;
+    - Stays within traditional types: tuples and dicts. Evt. OrderedDict;
+    - Some proposed strategies are similar in behavior to a traditional function call;
 
 Cons: 
     - Complex and wasteful; 
@@ -210,9 +213,15 @@ Applied to our cases would produce:
 
 Empty indexing a[] of course remains invalid syntax.
 
-Pros: Similar to function call, evolves naturally from it.
-Cons: It doesn't preserve order, unless an OrderedDict is used.
-      Forbids C7, but is it really needed?
+Pros: 
+    - Similar to function call, evolves naturally from it;
+    - Use of keyword indexing with an object whose __getitem__ 
+      doesn't have a kwargs will fail in an obvious way.
+      That's not the case for the other strategies.
+
+Cons: 
+    - It doesn't preserve order, unless an OrderedDict is used;
+    - Forbids C7, but is it really needed?
 
 Strategy 3: named tuple
 -----------------------
@@ -259,7 +268,7 @@ is not needed. One could keep the indexing as is, and use a traditional
 get() method for those cases where basic indexing is not enough. This
 is a good point, but as already reported in the introduction, methods have a
 different semantic weight from indexing, and you can't use slices directly
-in methods. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3,None), Z=2).
+in methods. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3), Z=2).
 
 Relative to Strategy 1, a comment from Ian Cordasco points out that "it would
 be unreasonable for just one method to behave totally differently from the
@@ -287,6 +296,87 @@ ordering information of the keyword arguments is important, and if indexes and k
 can be ordered in an arbitrary way (e.g. a[1,Z=3,2,R=4]). PEP-468 tries to
 address the first point by proposing the use of an ordereddict.
 
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+I would be inclined to simply state, in the PEP, that keyword
+arguments in indexing are equivalent to kwargs in function calls, and
+equally unordered (that is to say: if a proposal to make function call
+kwargs ordered is accepted, the same consideration can be applied to
+this, but otherwise they have no order). This does mean that it
+doesn't fit the original use-case, but it seems very odd to start out
+by saying "here, let's give indexing the option to carry keyword args,
+just like with function calls", and then come back and say "oh, but
+unlike function calls, they're inherently ordered and carried very
+differently".
+
+Abusing the slice object
+
+"Z":3
+
+
+For the OP's use-case, though, it would actually be possible to abuse
+slice notation. I don't remember this being mentioned, but it does
+preserve order; the cost is that all the "keywords" have to be defined
+as objects.
+
+class kw: pass # because object() doesn't have attributes
+def make_kw(names):
+    for i in names.split():
+        globals()[i] = obj = kw()
+        obj.keyword_arg = i
+make_kw("Z R X")
+
+# Now you can use them in indexing
+some_obj[5, Z:3]
+some_obj[7, Z:3, R:4]
+
+The parameters will arrive in the item tuple as slice objects, where
+the start is a signature object and the stop is its value.
+
+>>> some_obj[5, Z:3]
+getitem: (5, slice(<__main__.kw object at 0x016C5E10>, 3, None))
+
+Yes, it uses a colon rather than an equals sign, but on the flip side,
+it already works :)
+
+It's a well written PEP, but the "just use call notation instead"
+argument is going to be a challenging one to overcome.
+
+Given that part of the rationale given is that "slice(start, stop,
+step)" is uglier than the "start:stop:step" permitted in an indexing
+operation, the option of allowing "[start:]",
+"[:stop]","[start:stop:step]", etc as dedicated slice syntax should
+also be explicitly considered.
+
+Compare:
+
+    a.get(slice(1,3), Z=2) # today
+    a.get([1:3], Z=2) # slice sytax
+    a[1:3, Z=2] # PEP
+
+Introducing a more general slice notation would make indexing *less*
+special (reducing the current "allows slice notation" special case to
+"allows slice notation with the surrounding square brackets implied".
+
+The reduction of special casing could be taken further, by allowing
+the surrounding square brackets to be omitted in tuple and list
+displays, just as they are in indexing operations.
+
+I'm not saying such a proposal would necessarily be accepted - I just
+see a proposal that takes an existing special case and proposes to
+make it *less* special as more appealing than one that proposes to
+make it even *more* special.
+
+
+abusing slice notation does not allow to pass a slice as an argument,e,g
+Z=1:5 would not be possible.
+
+
+$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+
 References
 ==========
 
@@ -297,8 +387,10 @@ References
 Acknowledgements
 ================
 
-Contributions credits to Chris Angelico.
- 
+Contributions credits to Chris Angelico,  Anthony Risinger, Rob Cliffe, Nick Coghlan, Bruce Leban, 
+Ian Cordasco, Andrew Barnert, Terry Reedy, Paul Moore, Devin Jeanpierre
+
+
 Copyright
 =========
 
