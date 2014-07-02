@@ -25,25 +25,25 @@ Motivation
 The current syntax of the indexing operation provides the following 
 strategies for access 
 
-   >>> a[3]       # returns the fourth element of a
-   >>> a[1:10:2]  # slice notation (extract a subset of the data)
-   >>> a[3,2]     # multiple indexes (for multidimensional arrays)
+    >>> a[3]       # returns the fourth element of a
+    >>> a[1:10:2]  # slice notation (extract a subset of the data)
+    >>> a[3,2]     # multiple indexes (for multidimensional arrays)
 
 The additional notation proposed in this PEP would allow notations involving
 keyword arguments in the indexing operation, e.g.
 
-   >>> a[K=3]
-   >>> a[3,R=3,K=4]
+    >>> a[K=3]
+    >>> a[3,R=3,K=4]
 
 The following practical use cases for this notation present two broad categories
-of usage of a keyworded specification in indexing: as an index, and as an option
-contextual to the indexing:
+of usage of a keyworded specification in indexing: as a named index, and as an
+option contextual to the indexing. Specifically:
 
 1. In some domain, such as computational physics and chemistry, the use of a
 notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
 a level of accuracy
 
-  >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
+    >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
 In this case, the index operation would return a basis set at the chosen level
 of accuracy (represented by the parameter Z). The reason behind an indexing is that
@@ -55,23 +55,23 @@ row 5:8 to element 2) and each column is associated to a given degree of accurac
 2. To provide a more communicative meaning to the index, preventing e.g. accidental
    inversion of indexes
 
-  >>> gridValues[x=3, y=5, z=8]
-  >>> rain[time=0:12, location=location]
+    >>> gridValues[x=3, y=5, z=8]
+    >>> rain[time=0:12, location=location]
 
 3. A "default" option allows to specify a default return value when the index
    is not present
 
-  >>> lst = [1, 2, 3]
-  >>> value = lst[5, default=0]  # value is 0
+    >>> lst = [1, 2, 3]
+    >>> value = lst[5, default=0]  # value is 0
 
 4. For a sparse dataset, to specify an interpolation strategy 
    to infer a missing point from e.g. its surrounding data.
 
- >>> value = array[1, 3, interpolate=spline_interpolator]
+    >>> value = array[1, 3, interpolate=spline_interpolator]
 
 5. A unit could be specified with the same mechanism
 
-  >>> value = array[1, 3, unit="degrees"]
+    >>> value = array[1, 3, unit="degrees"]
 
 How the notation is interpreted is up to the implementing class. 
 
@@ -97,12 +97,11 @@ object passed to argument idx:
 
 Except for its unique ability to handle slice notation, the indexing operation
 has similarities to a plain method call: it acts like one when invoked with
-only one element; If the number of elements is greater than one, the
-idx argument behaves like a *args. 
-
-However, an indexing operation has the strong semantic implication of
-extraction of a subset out of a larger set, which is not present in a regular
-method call, and its different visual style is important for readability.
+only one element; If the number of elements is greater than one, the idx
+argument behaves like a *args. However, an indexing operation has the strong
+semantic implication of extraction of a subset out of a larger set, which is
+not automatically associated to a regular method call unless appropriate naming
+is chosen. Moreover, its different visual style is important for readability.
 
 Specifications
 ==============
@@ -112,25 +111,27 @@ __getitem__, or modify it in a backward-compatible way. We will present
 different alternatives, keeping into account the possible cases that need
 to be addressed
 
-        C0. a[1]; a[1,2] (Traditional indexing)
+    C0. a[1]; a[1,2]         # Traditional indexing
 	C1. a[Z=3] 
 	C2. a[Z=3, R=4]
 	C3. a[1, Z=3]
 	C4. a[1, Z=3, R=4]
 	C5. a[1, 2, Z=3]
 	C6. a[1, 2, Z=3, R=4]
-	C7. a[1, Z=3, 2, R=4]
+	C7. a[1, Z=3, 2, R=4]    # Interposed ordering
 
-The possible strategies for __getitem__ are:
+The possible strategies are:
 
-Strategy 1: 
-----------------------
+Strategy 1: Same signature, new argument contents.
+--------------------------------------------------
+
 In the current implementation, when many arguments are passed to __getitem__,
 they are grouped in a tuple and this tuple is passed to __getitem__ as the 
-single argument idx. This strategy keeps the current signature, but expands the
-range of variability in type and contents of idx. This approach has a fundamental
-flaw in having degenerate notations, but this flaw can be overlooked by accepting
-the equivalency of the representations.
+single argument idx. Strategy 1 keeps the current signature, but expands the
+range of variability in type and contents of idx. 
+
+This strategy has a fundamental flaw in having degenerate notations, but this
+flaw can be overlooked by accepting the equivalency of the representations. 
 
 We identify three possible sub-strategies P1, P2, and P3 as the product of the call. 
 P1 uses a single dictionary for the keyword arguments. P2 uses individual single-item
@@ -139,14 +140,14 @@ dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, val
 The old behavior for C0 is unchanged.
 
 	C0: a[1]        -> idx = 1                    # integer
-            a[1,2]      -> idx = (1,2)                # tuple
+        a[1,2]      -> idx = (1,2)                # tuple
 
 In C1, we can use either a dictionary or a tuple to represent key and value pair 
 for the specific indexing entry. We need to have a tuple with a tuple in C1 
 because otherwise we cannot differentiate a["Z", 3] from a[Z=3]. 
 
-        C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
-                        or idx = (("Z", 3),)          # P3 tuple of tuples 
+    C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
+                    or idx = (("Z", 3),)          # P3 tuple of tuples 
 
 As you can see, notation P1/P2 implies that a[Z=3] and a[{"Z": 3}] will call __getitem__ passing
 the exact same value. This pervasive problem is present throughout this Strategy in different
@@ -154,9 +155,9 @@ forms.
 
 For the C2 case:
 
-        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
-                        or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
-                        or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
+    C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
+                    or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
+                    or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
 
 P1 naturally maps to the traditional **kwargs behavior, however it breaks the 
 convention that two or more entries for the index produce a tuple. 
@@ -169,32 +170,33 @@ The remaining cases are here shown:
 	                or idx = (1, ("Z", 3))    # P3
 	                
 	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
-                           or idx = (1, {"Z": 3}, {"R": 4})
+                       or idx = (1, {"Z": 3}, {"R": 4})
                            
-        C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})
-                           or idx = (1, 2, ("Z", 3))
+    C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})
+                       or idx = (1, 2, ("Z", 3))
                            
-        C6. a[1, 2, Z=3, R=4] -> idx = (1, 2, {"Z":3, "R": 4})
-                              or idx = (1, 2, {"Z": 3}, {"R": 4})
-                              or idx = (1, 2, ("Z", 3), ("R", 4))
+    C6. a[1, 2, Z=3, R=4] -> idx = (1, 2, {"Z":3, "R": 4})
+                          or idx = (1, 2, {"Z": 3}, {"R": 4})
+                          or idx = (1, 2, ("Z", 3), ("R", 4))
                               
 	C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # P1. Pack the keyword arguments. Ugly and unexpected.
-                              or raise SyntaxError                # P1. Same behavior as in function calls.
-		              or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
-		              or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
+                          or raise SyntaxError                # P1. Same behavior as in function calls.
+	                      or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
+		                  or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
 
 Pros: 
     - Signature is unchanged; 
     - P2/P3 can preserve ordering of keyword arguments as specified at indexing, 
-    - P1 needs an ordereddict, but would destroy interposed ordering if allowed;
+    - P1 needs an OrderedDict, but would destroy interposed ordering if allowed: 
+      all keyword indexes would be dumped into the dictionary;
     - Stays within traditional types: tuples and dicts. Evt. OrderedDict;
     - Some proposed strategies are similar in behavior to a traditional function call;
 
 Cons: 
-    - Complex and wasteful; 
-    - Degeneracy in notation (e.g. a[Z=3] and a[{"Z":3}] are equivalent notations 
-      at the __[get|set|del]item__ level). a[1, K=2] map to idx=(1,{"K" : 2}) 
-      equivalent to a[1, {"k": 2}]. This behavior may or may not be acceptable. 
+    - Apparenty complex and wasteful; 
+    - Degeneracy in notation (e.g. a[Z=3] and a[{"Z":3}] are equivalent and
+      indistinguishable notations at the __[get|set|del]item__ level).
+      This behavior may or may not be acceptable. 
     - idx type and layout seems to change depending on the whims of the caller;
     - May be complex to parse what is passed, especially in the case of tuple of tuples;
     - P2 Creates a lot of single keys dictionary as members of a tuple. Looks ugly.
@@ -216,7 +218,7 @@ The signature would then be either
 
 Applied to our cases would produce:
 
-        C0. a[1,2]            -> idx=(1,2); kwargs={}
+    C0. a[1,2]            -> idx=(1,2); kwargs={}
 	C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
 	C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
 	C3. a[1, Z=3]         -> idx=1    ;  kwargs={"Z":3}
@@ -240,20 +242,20 @@ Cons:
 Strategy 3: named tuple
 -----------------------
 
-Always return a namedtuple for idx instead of a tuple. 
-Keyword arguments would obviousely have their key as key, and positional
-argument would have an underscore followed by their order:
+Return a namedtuple for idx instead of a tuple.  Keyword arguments would
+obviousely have their key as key, and positional argument would have an
+underscore followed by their order:
 
-        C0. a[2]; a[2,3]      -> idx = 3; idx=(_1=2, _2=3)
+    C0. a[1]; a[1,2]      -> idx = 1; idx=(_0=1, _1=2)
 	C1. a[Z=3]            -> idx = (Z=3)
 	C2. a[Z=3, R=2]       -> idx = (Z=3, R=2)
-	C3. a[1, Z=3]         -> idx = (_1=1, Z=3) 
-	C4. a[1, Z=3, R=2]    -> idx = (_1=1, Z=3, R=2)
-	C5. a[1, 2, Z=3]      -> idx = (_1=1, _2=2, Z=3)
-	C6. a[1, 2, Z=3, R=4] -> (_1=1, _2=2, Z=3, R=4)
-	C7. a[1, Z=3, 2, R=4] -> (_1=1, Z=3, _2=2, R=4) or
-                                 (_1=1, Z=3, _3=2, R=4) or 
-				 invalid ?
+	C3. a[1, Z=3]         -> idx = (_0=1, Z=3) 
+	C4. a[1, Z=3, R=2]    -> idx = (_0=1, Z=3, R=2)
+	C5. a[1, 2, Z=3]      -> idx = (_0=1, _2=2, Z=3)
+	C6. a[1, 2, Z=3, R=4] -> (_0=1, _1=2, Z=3, R=4)
+	C7. a[1, Z=3, 2, R=4] -> (_0=1, Z=3, _1=2, R=4) 
+                          or (_0=1, Z=3, _2=2, R=4)
+				          or raise SyntaxError
 
 The required typename of the namedtuple could be "Index" or the name of the
 argument in the function definition, it keeps the ordering and is easy to
@@ -261,28 +263,98 @@ analyse by using the _fields attribute. It is backward compatible, provided
 that C0 with more than one entry now passes a namedtuple instead of a plain
 tuple.  It should be faster than creating many one element dictionaries, too.
 
-Pros: Looks really nice. namedtuple transparently replaces tuple and gracefully
+Pros: 
+    - Looks really nice. namedtuple transparently replaces tuple and gracefully
       degrades to the old behavior.
 
-Cons: According to some sources (Ref 3) namedtuple is not well developed.
+Cons: 
+    - According to some sources (Ref 3) namedtuple is not well developed.
       To include it as such important object would probably require rework
       and improvement;
-      The namedtuple fields, and thus the type, will have to change according
+    - The namedtuple fields, and thus the type, will have to change according
       to the passed arguments. This can be a performance bottleneck, and makes
       it impossible to guarantee that two subsequent index accesses get the same
       Index class;
-      the _n "magic" fields are a bit unusual, but ipython already uses them
+    - the _n "magic" fields are a bit unusual, but ipython already uses them
       for result history.
+    - Python currently has no builtin named tuple (an ordered collection of
+      optionally named values)
+    - Differently from a function, the two notations gridValues[x=3, y=5, z=8]
+      and gridValues[3,5,8] would not gracefully match. In a function, we can
+      pre-define argument names. Not so in __getitem__, leaving the task for
+      interpreting and matching to __getitem__ itself.
+
+C interface
+===========
+
+The C interface would have to change to allow the new feature. Specifically,
+modifications would be required to PyObject_GetItem and related. The change in
+interface will be characterized after settling the python interface first, and
+therefore remains an open point of this PEP. 
+
+Alternative Strategies
+======================
+
+In this section, we present alternative strategies that would workaround the
+missing feature and make the proposed enhancement not worth of implementation
+
+Use a method
+------------
+
+One could keep the indexing as is, and use a traditional get() method for those
+cases where basic indexing is not enough. This is a good point, but as already
+reported in the introduction, methods have a different semantic weight from
+indexing, and you can't use slices directly in methods. Compare e.g. 
+a[1:3, Z=2] with a.get(slice(1,3), Z=2).
+
+The authors however recognize this argument is compelling, and the advantage
+in semantic expressivity of a keyword-based indexing may be offset by a rarely
+used feature that does not bring enough benefit and may have limited adoption.
+
+Emulate requested behavior by abusing the slice object
+------------------------------------------------------
+
+This extremely creative method exploits the slice objects' behavior, provided
+that one accepts to use strings (or instantiate properly named placeholder
+objects for the keys), and accept to use ":" instead of "=".
+
+    >>> a["K":3]
+    slice('K', 3, None)
+    >>> a["K":3, "R":4]
+    (slice('K', 3, None), slice('R', 4, None))
+    >>> 
+
+While clearly smart, this approach does not allow easy inquire of the key/value
+pair, it's too clever and esotheric, and does not allow to pass a slice as in
+a[K=1:10:2]
+
+Pass a dictionary as an additional index
+----------------------------------------
+
+    >>> a[1, 2, {"K": 3}]
+
+this notation, although less elegant, can already be used and achieves similar
+results. It's evident that the proposed Strategy 1 can be interpreted as
+syntactic sugar for this notation.
 
 Objections and Considerations
 =============================
 
-The first obvious objection to this PEP contents is that this extension
-is not needed. One could keep the indexing as is, and use a traditional
-get() method for those cases where basic indexing is not enough. This
-is a good point, but as already reported in the introduction, methods have a
-different semantic weight from indexing, and you can't use slices directly
-in methods. Compare e.g. a[1:3, Z=2] with a.get(slice(1,3), Z=2).
+Commenters expressed the following relevant points:
+
+Relevance of ordering of keyword arguments
+------------------------------------------
+
+As part of the discussion of this PEP, it's important to decide if the ordering
+information of the keyword arguments is important, and if indexes and keys can
+be ordered in an arbitrary way (e.g. a[1,Z=3,2,R=4]). PEP-468 tries to address
+the first point by proposing the use of an ordereddict, however one would be
+inclined to accept that keyword arguments in indexing are equivalent to kwargs
+in function calls, and therefore as of today equally unordered, and with the
+same restrictions.
+
+Need for homogeneity of behavior
+--------------------------------
 
 Relative to Strategy 1, a comment from Ian Cordasco points out that "it would
 be unreasonable for just one method to behave totally differently from the
@@ -291,6 +363,16 @@ ostensibly, __setitem__) to take keyword arguments but instead of turning them
 into a dictionary, turn them into individual single-item dictionaries." We
 agree with his point, however it must be pointed out that __getitem__ is
 already special in some regards when it comes to passed arguments.
+
+Chris also states: "it seems very odd to start out by saying "here, let's give
+indexing the option to carry keyword args, just like with function calls", and
+then come back and say "oh, but unlike function calls, they're inherently
+ordered and carried very differently"." Again, we agree on this point.
+The most straightforward strategy to keep homogeneity would be Strategy 2,
+opening to a **kwargs argument on __getitem__.
+
+Having .get() become obsolete for indexing with default fallback
+----------------------------------------------------------------
 
 Introducing a "default" keyword would make dict.get() obsolete, which could be
 replaced by d["key", default=3]. Chris Angelico however states: "Currently,
@@ -303,103 +385,32 @@ Additionally, Chris continues: "There'll be an ad-hoc and fairly arbitrary
 puddle of names (some will go "default=", others will say that's way too long
 and go "def=", except that that's a keyword so they'll use "dflt=" or
 something...), unless there's a strong force pushing people to one consistent
-name.". This argument is valid but it's valid for any function call.
-
-Finally, as part of the discussion of this PEP, it's important to decide if the
-ordering information of the keyword arguments is important, and if indexes and keys
-can be ordered in an arbitrary way (e.g. a[1,Z=3,2,R=4]). PEP-468 tries to
-address the first point by proposing the use of an ordereddict.
+name.". This argument is valid but it's equally valid for any function call,
+and is generally fixed by established convention and documentation.
 
 
-$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+On degeneracy of notation for Strategy 1
+----------------------------------------
 
-I would be inclined to simply state, in the PEP, that keyword
-arguments in indexing are equivalent to kwargs in function calls, and
-equally unordered (that is to say: if a proposal to make function call
-kwargs ordered is accepted, the same consideration can be applied to
-this, but otherwise they have no order). This does mean that it
-doesn't fit the original use-case, but it seems very odd to start out
-by saying "here, let's give indexing the option to carry keyword args,
-just like with function calls", and then come back and say "oh, but
-unlike function calls, they're inherently ordered and carried very
-differently".
-
-Abusing the slice object
-
-"Z":3
-
-
-For the OP's use-case, though, it would actually be possible to abuse
-slice notation. I don't remember this being mentioned, but it does
-preserve order; the cost is that all the "keywords" have to be defined
-as objects.
-
-class kw: pass # because object() doesn't have attributes
-def make_kw(names):
-    for i in names.split():
-        globals()[i] = obj = kw()
-        obj.keyword_arg = i
-make_kw("Z R X")
-
-# Now you can use them in indexing
-some_obj[5, Z:3]
-some_obj[7, Z:3, R:4]
-
-The parameters will arrive in the item tuple as slice objects, where
-the start is a signature object and the stop is its value.
-
->>> some_obj[5, Z:3]
-getitem: (5, slice(<__main__.kw object at 0x016C5E10>, 3, None))
-
-Yes, it uses a colon rather than an equals sign, but on the flip side,
-it already works :)
-
-It's a well written PEP, but the "just use call notation instead"
-argument is going to be a challenging one to overcome.
-
-Given that part of the rationale given is that "slice(start, stop,
-step)" is uglier than the "start:stop:step" permitted in an indexing
-operation, the option of allowing "[start:]",
-"[:stop]","[start:stop:step]", etc as dedicated slice syntax should
-also be explicitly considered.
-
-Compare:
-
-    a.get(slice(1,3), Z=2) # today
-    a.get([1:3], Z=2) # slice sytax
-    a[1:3, Z=2] # PEP
-
-Introducing a more general slice notation would make indexing *less*
-special (reducing the current "allows slice notation" special case to
-"allows slice notation with the surrounding square brackets implied".
-
-The reduction of special casing could be taken further, by allowing
-the surrounding square brackets to be omitted in tuple and list
-displays, just as they are in indexing operations.
-
-I'm not saying such a proposal would necessarily be accepted - I just
-see a proposal that takes an existing special case and proposes to
-make it *less* special as more appealing than one that proposes to
-make it even *more* special.
-
-
-abusing slice notation does not allow to pass a slice as an argument,e,g
-Z=1:5 would not be possible.
-
-
-add keyword+slicing notation
-
-$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-
-
+User Drekin commented: "The case of a[Z=3] and a[{"Z": 3}] is similar to
+current a[1, 2] and a[(1, 2)].  Even though one may argue that the parentheses
+are actually not part of tuple notation but are just needed because of syntax,
+it may look as degeneracy of notation when compared to function call: f(1, 2)
+is not the same thing as f((1, 2)).". 
 
 References
 ==========
 
-[1] http://article.gmane.org/gmane.comp.python.ideas/27584
-[2] https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
-[3] https://mail.python.org/pipermail/python-ideas/2013-June/021257.html
-[4] PEP pre-draft: Support for indexing with keyword arguments
+[1] "keyword-only args in __getitem__"
+    http://article.gmane.org/gmane.comp.python.ideas/27584
+
+[2] "Accepting keyword arguments for __getitem__"
+    https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
+
+[3] "namedtuple is not as good as it should be"
+    https://mail.python.org/pipermail/python-ideas/2013-June/021257.html
+
+[4] "PEP pre-draft: Support for indexing with keyword arguments"
     https://mail.python.org/pipermail/python-ideas/2014-July/028250.html
 
 Copyright
