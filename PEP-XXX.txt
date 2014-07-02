@@ -91,7 +91,7 @@ object passed to argument idx:
     - When a single element is passed, e.g. a[2], idx will be 2.
     - When multiple elements are passed, they must be separated by commas: a[2, 3].
       In this case, idx will be a tuple (2, 3). With a[2, 3, "hello", {}] 
-      idx will be (2, 3, "hello",{}).
+      idx will be (2, 3, "hello", {}).
     - A slicing notation e.g. a[2:10] will produce a slice object, or a tuple
       containing slice objects if multiple values were passed.
 
@@ -128,31 +128,44 @@ Strategy 1:
 In the current implementation, when many arguments are passed to __getitem__,
 they are grouped in a tuple and this tuple is passed to __getitem__ as the 
 single argument idx. This strategy keeps the current signature, but expands the
-range of variability in type and contents of idx. 
+range of variability in type and contents of idx. This approach has a fundamental
+flaw in having degenerate notations, but this flaw can be overlooked by accepting
+the equivalency of the representations.
+
 We identify three possible sub-strategies P1, P2, and P3 as the product of the call. 
 P1 uses a single dictionary for the keyword arguments. P2 uses individual single-item
 dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, value) tuple.
 
+The old behavior for C0 is unchanged.
+
 	C0: a[1]        -> idx = 1                    # integer
             a[1,2]      -> idx = (1,2)                # tuple
 
+In C1, we can use either a dictionary or a tuple to represent key and value pair 
+for the specific indexing entry. We need to have a tuple with a tuple in C1 
+because otherwise we cannot differentiate a["Z", 3] from a[Z=3]. 
+
         C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
-                        or idx = (("Z", 3),)          # P3 tuple of tuples [*]
-                        
+                        or idx = (("Z", 3),)          # P3 tuple of tuples 
+
+As you can see, notation P1/P2 implies that a[Z=3] and a[{"Z": 3}] will call __getitem__ passing
+the exact same value. This pervasive problem is present throughout this Strategy in different
+forms.
+
+For the C2 case:
+
         C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
                         or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
-                        or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples [*]
+                        or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
 
+P1 naturally maps to the traditional **kwargs behavior, however it breaks the 
+convention that two or more entries for the index produce a tuple. 
+P2 preserves the above behavior, and additionally preserves the order. 
+Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
 
-[*] In this case, we use a tuple to represent key and value pair for the specific
-     indexing entry. We need to have a tuple with a tuple in C1 because otherwise 
-     we cannot differentiate a["Z", 3] from a[Z=3]
-[**] Naturally maps to the traditional **kwargs behavior, however it breaks
-    the convention that two or more entries for the index produce a tuple. 
-[***] preserves the above behavior, and additionally preserves the order. 
-     Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
+The remaining cases are here shown:
 
-	C3. a[1, Z=3]   -> idx = (1, {"Z":3})     # P1/P2 tuple of two elements
+	C3. a[1, Z=3]   -> idx = (1, {"Z": 3})    # P1/P2 tuple of two elements
 	                or idx = (1, ("Z", 3))    # P3
 	                
 	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
@@ -179,14 +192,15 @@ Pros:
 
 Cons: 
     - Complex and wasteful; 
+    - Degeneracy in notation (e.g. a[Z=3] and a[{"Z":3}] are equivalent notations 
+      at the __[get|set|del]item__ level). a[1, K=2] map to idx=(1,{"K" : 2}) 
+      equivalent to a[1, {"k": 2}]. This behavior may or may not be acceptable. 
     - idx type and layout seems to change depending on the whims of the caller;
-    - May be complex to parse what is passed;
+    - May be complex to parse what is passed, especially in the case of tuple of tuples;
     - P2 Creates a lot of single keys dictionary as members of a tuple. Looks ugly.
       P3 would be lighter and easier to use than the tuple of dicts, and still 
       preserves order (unlike the regular dict), but would result in clumsy 
       extraction of keywords.
-    - Having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
-      a[1,{"k": 2}], which may or may not be indended. 
 
 
 Strategy 2: kwargs argument
@@ -373,6 +387,8 @@ abusing slice notation does not allow to pass a slice as an argument,e,g
 Z=1:5 would not be possible.
 
 
+add keyword+slicing notation
+
 $$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 
@@ -383,13 +399,8 @@ References
 [1] http://article.gmane.org/gmane.comp.python.ideas/27584
 [2] https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 [3] https://mail.python.org/pipermail/python-ideas/2013-June/021257.html
-
-Acknowledgements
-================
-
-Contributions credits to Chris Angelico,  Anthony Risinger, Rob Cliffe, Nick Coghlan, Bruce Leban, 
-Ian Cordasco, Andrew Barnert, Terry Reedy, Paul Moore, Devin Jeanpierre
-
+[4] PEP pre-draft: Support for indexing with keyword arguments
+    https://mail.python.org/pipermail/python-ideas/2014-July/028250.html
 
 Copyright
 =========
