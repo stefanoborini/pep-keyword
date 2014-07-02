@@ -277,26 +277,28 @@ Cons:
       Index class;
     - the _n "magic" fields are a bit unusual, but ipython already uses them
       for result history.
-    - Python currently has no builtin named tuple (an ordered collection of
-      optionally named values)
+    - Python currently has no builtin namedtuple. The current one is available
+      in the "collections" module in the standard library.
     - Differently from a function, the two notations gridValues[x=3, y=5, z=8]
-      and gridValues[3,5,8] would not gracefully match. In a function, we can
-      pre-define argument names. Not so in __getitem__, leaving the task for
-      interpreting and matching to __getitem__ itself.
+      and gridValues[3,5,8] would not gracefully match if the order is modified
+      at call time (e.g. we ask for gridValues[y=5, z=8, x=3]). In a function, 
+      we can pre-define argument names so that keyword arguments are properly
+      matched. Not so in __getitem__, leaving the task for interpreting and
+      matching to __getitem__ itself.
 
 C interface
 ===========
 
 The C interface would have to change to allow the new feature. Specifically,
-modifications would be required to PyObject_GetItem and related. The change in
-interface will be characterized after settling the python interface first, and
-therefore remains an open point of this PEP. 
+modifications would potentially be required to PyObject_GetItem and related.
+The change in interface will be characterized after settling the pure python
+interface first, and therefore remains an open point of this PEP. 
 
 Alternative Strategies
 ======================
 
 In this section, we present alternative strategies that would workaround the
-missing feature and make the proposed enhancement not worth of implementation
+missing feature and make the proposed enhancement not worth of implementation.
 
 Use a method
 ------------
@@ -307,7 +309,7 @@ reported in the introduction, methods have a different semantic weight from
 indexing, and you can't use slices directly in methods. Compare e.g. 
 a[1:3, Z=2] with a.get(slice(1,3), Z=2).
 
-The authors however recognize this argument is compelling, and the advantage
+The authors however recognize this argument as compelling, and the advantage
 in semantic expressivity of a keyword-based indexing may be offset by a rarely
 used feature that does not bring enough benefit and may have limited adoption.
 
@@ -337,10 +339,10 @@ this notation, although less elegant, can already be used and achieves similar
 results. It's evident that the proposed Strategy 1 can be interpreted as
 syntactic sugar for this notation.
 
-Objections and Considerations
-=============================
+Additional Comments 
+===================
 
-Commenters expressed the following relevant points:
+Commenters also expressed the following relevant points:
 
 Relevance of ordering of keyword arguments
 ------------------------------------------
@@ -364,17 +366,17 @@ into a dictionary, turn them into individual single-item dictionaries." We
 agree with his point, however it must be pointed out that __getitem__ is
 already special in some regards when it comes to passed arguments.
 
-Chris also states: "it seems very odd to start out by saying "here, let's give
-indexing the option to carry keyword args, just like with function calls", and
-then come back and say "oh, but unlike function calls, they're inherently
-ordered and carried very differently"." Again, we agree on this point.
-The most straightforward strategy to keep homogeneity would be Strategy 2,
-opening to a **kwargs argument on __getitem__.
+Chris Angelico also states: "it seems very odd to start out by saying "here,
+let's give indexing the option to carry keyword args, just like with function
+calls", and then come back and say "oh, but unlike function calls, they're
+inherently ordered and carried very differently"." Again, we agree on this
+point.  The most straightforward strategy to keep homogeneity would be Strategy
+2, opening to a **kwargs argument on __getitem__.
 
 Having .get() become obsolete for indexing with default fallback
 ----------------------------------------------------------------
 
-Introducing a "default" keyword would make dict.get() obsolete, which could be
+Introducing a "default" keyword could make dict.get() obsolete, which would be
 replaced by d["key", default=3]. Chris Angelico however states: "Currently,
 you need to write __getitem__ (which raises an exception on finding a problem)
 plus something else, eg get(), which returns a default instead. By your
@@ -387,7 +389,6 @@ and go "def=", except that that's a keyword so they'll use "dflt=" or
 something...), unless there's a strong force pushing people to one consistent
 name.". This argument is valid but it's equally valid for any function call,
 and is generally fixed by established convention and documentation.
-
 
 On degeneracy of notation for Strategy 1
 ----------------------------------------
