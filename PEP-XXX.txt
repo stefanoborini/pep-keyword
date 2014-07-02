@@ -125,40 +125,64 @@ Strategy 1:
 In the current implementation, when many arguments are passed to __getitem__,
 they are grouped in a tuple and this tuple is passed to __getitem__ as the 
 single argument idx. This strategy keeps the current signature, but expands the
-range of variability in type and contents of idx.
+range of variability in type and contents of idx. 
+We identify three possible sub-strategies P1, P2, and P3 as the product of the call. 
+P1 uses a single dictionary for the keyword arguments. P2 uses individual single-item
+dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, value) tuple.
 
-	C0: a[1]        -> idx = 1        # integer
-            a[1,2]      -> idx = (1,2)    # tuple
-        C1: a[Z=3]      -> idx = {"Z": 3} # dictionary with single key
-        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # dictionary/ordereddict [*]
-                        or idx = ({"Z": 3}, {"R": 4}) # tuple of two single-key dict [**]
+	C0: a[1]        -> idx = 1                    # integer
+            a[1,2]      -> idx = (1,2)                # tuple
 
-[*] Naturally maps to the traditional **kwargs behavior, however it breaks
+        C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
+                        or idx = (("Z", 3),)          # P3 tuple of tuples [*]
+                        
+        C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
+                        or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
+                        or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples [*]
+
+
+[*] In this case, we use a tuple to represent key and value pair for the specific
+     indexing entry. We need to have a tuple with a tuple in C1 because otherwise 
+     we cannot differentiate a["Z", 3] from a[Z=3]
+[**] Naturally maps to the traditional **kwargs behavior, however it breaks
     the convention that two or more entries for the index produce a tuple. 
-[**] preserves the above behavior, and additionally preserves the order. 
+[***] preserves the above behavior, and additionally preserves the order. 
      Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
 
-	C3. a[1, Z=3]   -> idx = (1, {"Z":3})     # tuple of two elements, 
-	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})
+	C3. a[1, Z=3]   -> idx = (1, {"Z":3})     # P1/P2 tuple of two elements
+	                or idx = (1, ("Z", 3))    # P3
+	                
+	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
                            or idx = (1, {"Z": 3}, {"R": 4})
+                           
         C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})
+                           or idx = (1, 2, ("Z", 3))
+                           
         C6. a[1, 2, Z=3, R=4] -> idx = (1, 2, {"Z":3, "R": 4})
                               or idx = (1, 2, {"Z": 3}, {"R": 4})
-	C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # Pack all keyword arguments 
-                                                                  # in the dict. Ugly and unexpected.
-		              or idx = (1, {"Z": 3}, 3, {"R": 4}) # Keep using the one-key dict strategy 
-                              or raise SyntaxError, like in the case of function calls.
+                              or idx = (1, 2, ("Z", 3), ("R", 4))
+                              
+	C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # P1. Pack the keyword arguments. Ugly and unexpected.
+                              or raise SyntaxError                # P1. Same behavior as in function calls.
+		              or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
+		              or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
 
-Pros: Signature is unchanged; 
-      Can preserve ordering of keyword arguments as specified at indexing;
-      Stays within traditional types: tuples and dicts;
-      Some proposed strategies are similar in behavior to a traditional function call;
+Pros: 
+    + Signature is unchanged; 
+    + P2/P3 can preserve ordering of keyword arguments as specified at indexing, 
+    + P1 needs an ordereddict, but would destroy interposed ordering if allowed;
+    + Stays within traditional types: tuples and dicts. Evt. OrderedDict;
+    + Some proposed strategies are similar in behavior to a traditional function call;
 
-Cons: Complex and wasteful; 
-      idx type and layout can change depending on the whims of the caller;
-      May be complex to parse what is passed;
-      Creates a lot of single keys dictionary as members of a tuple. Looks ugly;
-      Having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
+Cons: 
+    - Complex and wasteful; 
+    - idx type and layout seems to change depending on the whims of the caller;
+    - May be complex to parse what is passed;
+    - P2 Creates a lot of single keys dictionary as members of a tuple. Looks ugly.
+      P3 would be lighter and easier to use than the tuple of dicts, and still 
+      preserves order (unlike the regular dict), but would result in clumsy 
+      extraction of keywords.
+    - Having a[1,k=2] map to y=(1,{"k":2}) makes it impossible to differentiate from
       a[1,{"k": 2}], which may or may not be indended. 
 
 
@@ -270,6 +294,11 @@ References
 [2] https://mail.python.org/pipermail/python-ideas/2014-June/028164.html
 [3] https://mail.python.org/pipermail/python-ideas/2013-June/021257.html
 
+Acknowledgements
+================
+
+Contributions credits to Chris Angelico.
+ 
 Copyright
 =========
 
