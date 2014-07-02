@@ -112,13 +112,13 @@ different alternatives, keeping into account the possible cases that need
 to be addressed
 
     C0. a[1]; a[1,2]         # Traditional indexing
-	C1. a[Z=3] 
-	C2. a[Z=3, R=4]
-	C3. a[1, Z=3]
-	C4. a[1, Z=3, R=4]
-	C5. a[1, 2, Z=3]
-	C6. a[1, 2, Z=3, R=4]
-	C7. a[1, Z=3, 2, R=4]    # Interposed ordering
+    C1. a[Z=3] 
+    C2. a[Z=3, R=4]
+    C3. a[1, Z=3]
+    C4. a[1, Z=3, R=4]
+    C5. a[1, 2, Z=3]
+    C6. a[1, 2, Z=3, R=4]
+    C7. a[1, Z=3, 2, R=4]    # Interposed ordering
 
 The possible strategies are:
 
@@ -139,7 +139,7 @@ dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, val
 
 The old behavior for C0 is unchanged.
 
-	C0: a[1]        -> idx = 1                    # integer
+    C0: a[1]        -> idx = 1                    # integer
         a[1,2]      -> idx = (1,2)                # tuple
 
 In C1, we can use either a dictionary or a tuple to represent key and value pair 
@@ -166,10 +166,10 @@ Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
 
 The remaining cases are here shown:
 
-	C3. a[1, Z=3]   -> idx = (1, {"Z": 3})    # P1/P2 tuple of two elements
-	                or idx = (1, ("Z", 3))    # P3
-	                
-	C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
+    C3. a[1, Z=3]   -> idx = (1, {"Z": 3})    # P1/P2 tuple of two elements
+                    or idx = (1, ("Z", 3))    # P3
+                    
+    C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
                        or idx = (1, {"Z": 3}, {"R": 4})
                            
     C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})
@@ -179,10 +179,10 @@ The remaining cases are here shown:
                           or idx = (1, 2, {"Z": 3}, {"R": 4})
                           or idx = (1, 2, ("Z", 3), ("R", 4))
                               
-	C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # P1. Pack the keyword arguments. Ugly and unexpected.
+    C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # P1. Pack the keyword arguments. Ugly and unexpected.
                           or raise SyntaxError                # P1. Same behavior as in function calls.
-	                      or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
-		                  or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
+                          or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
+                          or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
 
 Pros: 
     - Signature is unchanged; 
@@ -212,20 +212,20 @@ __getitem__ accepts an optional **kwargs argument which should be keyword only.
 idx also becomes optional to support a case where no non-keyword arguments are allowed.
 The signature would then be either 
 
-	__getitem__(self, idx) 
-	__getitem__(self, idx, **kwargs), 
-	__getitem__(self, **kwargs) 
+    __getitem__(self, idx) 
+    __getitem__(self, idx, **kwargs), 
+    __getitem__(self, **kwargs) 
 
 Applied to our cases would produce:
 
     C0. a[1,2]            -> idx=(1,2); kwargs={}
-	C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
-	C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
-	C3. a[1, Z=3]         -> idx=1    ;  kwargs={"Z":3}
-	C4. a[1, Z=3, R=4]    -> idx=1    ;  kwargs={"Z":3, "R":4} 
-	C5. a[1, 2, Z=3]      -> idx=(1,2);  kwargs={"Z":3}
-	C6. a[1, 2, Z=3, R=4] -> idx=(1,2);  kwargs={"Z":3, "R":4}
-	C7. a[1, Z=3, 2, R=4] -> forbidden in agreement to function behavior
+    C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
+    C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
+    C3. a[1, Z=3]         -> idx=1    ;  kwargs={"Z":3}
+    C4. a[1, Z=3, R=4]    -> idx=1    ;  kwargs={"Z":3, "R":4} 
+    C5. a[1, 2, Z=3]      -> idx=(1,2);  kwargs={"Z":3}
+    C6. a[1, 2, Z=3, R=4] -> idx=(1,2);  kwargs={"Z":3, "R":4}
+    C7. a[1, Z=3, 2, R=4] -> forbidden in agreement to function behavior
 
 Empty indexing a[] of course remains invalid syntax.
 
@@ -247,15 +247,15 @@ obviousely have their key as key, and positional argument would have an
 underscore followed by their order:
 
     C0. a[1]; a[1,2]      -> idx = 1; idx=(_0=1, _1=2)
-	C1. a[Z=3]            -> idx = (Z=3)
-	C2. a[Z=3, R=2]       -> idx = (Z=3, R=2)
-	C3. a[1, Z=3]         -> idx = (_0=1, Z=3) 
-	C4. a[1, Z=3, R=2]    -> idx = (_0=1, Z=3, R=2)
-	C5. a[1, 2, Z=3]      -> idx = (_0=1, _2=2, Z=3)
-	C6. a[1, 2, Z=3, R=4] -> (_0=1, _1=2, Z=3, R=4)
-	C7. a[1, Z=3, 2, R=4] -> (_0=1, Z=3, _1=2, R=4) 
+    C1. a[Z=3]            -> idx = (Z=3)
+    C2. a[Z=3, R=2]       -> idx = (Z=3, R=2)
+    C3. a[1, Z=3]         -> idx = (_0=1, Z=3) 
+    C4. a[1, Z=3, R=2]    -> idx = (_0=1, Z=3, R=2)
+    C5. a[1, 2, Z=3]      -> idx = (_0=1, _2=2, Z=3)
+    C6. a[1, 2, Z=3, R=4] -> (_0=1, _1=2, Z=3, R=4)
+    C7. a[1, Z=3, 2, R=4] -> (_0=1, Z=3, _1=2, R=4) 
                           or (_0=1, Z=3, _2=2, R=4)
-				          or raise SyntaxError
+                          or raise SyntaxError
 
 The required typename of the namedtuple could be "Index" or the name of the
 argument in the function definition, it keeps the ordering and is easy to
