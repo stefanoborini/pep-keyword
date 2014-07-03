@@ -133,9 +133,12 @@ range of variability in type and contents of idx.
 This strategy has a fundamental flaw in having degenerate notations, but this
 flaw can be overlooked by accepting the equivalency of the representations. 
 
-We identify three possible sub-strategies P1, P2, and P3 as the product of the call. 
-P1 uses a single dictionary for the keyword arguments. P2 uses individual single-item
-dictionaries and P3 replaces the single-item dictionaries in P2 with a (key, value) tuple.
+We identify four possible ways to implement this Strategy:
+ 
+    P1: uses a single dictionary for the keyword arguments. 
+    P2: uses individual single-item dictionaries
+    P3: similar to P2, but replaces single-item dictionaries with a (key, value) tuple.
+    P4: similar to P2, but uses a special and additional new object: keyword()
 
 The old behavior for C0 is unchanged.
 
@@ -148,41 +151,53 @@ because otherwise we cannot differentiate a["Z", 3] from a[Z=3].
 
     C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
                     or idx = (("Z", 3),)          # P3 tuple of tuples 
+                    or idx = keyword("Z", 3)      # P4 keyword object 
 
 As you can see, notation P1/P2 implies that a[Z=3] and a[{"Z": 3}] will call __getitem__ passing
 the exact same value. This pervasive problem is present throughout this Strategy in different
-forms.
+forms. Using a keyword object would solve this degeneracy.
 
 For the C2 case:
 
     C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
                     or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
                     or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
+                    or idx = (keyword("Z", 3), 
+                              keyword("R", 4) )   # P4 keyword objects
 
 P1 naturally maps to the traditional **kwargs behavior, however it breaks the 
 convention that two or more entries for the index produce a tuple. 
-P2 preserves the above behavior, and additionally preserves the order. 
-Preserving the order is also possible with an OrderedDict as drafted by PEP-468.
+P2 preserves this behavior, and additionally preserves the order. 
+Preserving the order would also be possible with an OrderedDict as drafted by PEP-468.
 
 The remaining cases are here shown:
 
-    C3. a[1, Z=3]   -> idx = (1, {"Z": 3})    # P1/P2 tuple of two elements
-                    or idx = (1, ("Z", 3))    # P3
+    C3. a[1, Z=3]   -> idx = (1, {"Z": 3})                     # P1/P2
+                    or idx = (1, ("Z", 3))                     # P3
+                    or idx = (1, keyword("Z", 3))              # P4
                     
-    C4. a[1, Z=3, R=4] -> idx = (1, {"Z":3, "R": 4})     
-                       or idx = (1, {"Z": 3}, {"R": 4})
+    C4. a[1, Z=3, R=4] -> idx = (1, {"Z": 3, "R": 4})          # P1
+                       or idx = (1, {"Z": 3}, {"R": 4})        # P2
+                       or idx = (1, ("Z", 3), ("R", 4))        # P3
+                       or idx = (1, keyword("Z", 3),         
+                                    keyword("R", 4))           # P4
                            
-    C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})
-                       or idx = (1, 2, ("Z", 3))
+    C5. a[1, 2, Z=3]   -> idx = (1, 2, {"Z": 3})               # P1/P2 
+                       or idx = (1, 2, ("Z", 3))               # P3
+                       or idx = (1, 2, keyword("Z", 3))        # P4
                            
-    C6. a[1, 2, Z=3, R=4] -> idx = (1, 2, {"Z":3, "R": 4})
-                          or idx = (1, 2, {"Z": 3}, {"R": 4})
-                          or idx = (1, 2, ("Z", 3), ("R", 4))
+    C6. a[1, 2, Z=3, R=4] -> idx = (1, 2, {"Z":3, "R": 4})     # P1
+                          or idx = (1, 2, {"Z": 3}, {"R": 4})  # P2
+                          or idx = (1, 2, ("Z", 3), ("R", 4))  # P3
+                          or idx = (1, 2, keyword("Z", 3), 
+                                          keyword("R", 4))     # P4
                               
-    C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})   # P1. Pack the keyword arguments. Ugly and unexpected.
-                          or raise SyntaxError                # P1. Same behavior as in function calls.
-                          or idx = (1, {"Z": 3}, 2, {"R": 4}) # P2
-                          or idx = (1, ("Z", 3), 2, ("R", 4)) # P3
+    C7. a[1, Z=3, 2, R=4] -> idx = (1, 2, {"Z": 3, "R": 4})    # P1. Pack the keyword arguments. Ugly and unexpected.
+                          or raise SyntaxError                 # P1. Same behavior as in function calls.
+                          or idx = (1, {"Z": 3}, 2, {"R": 4})  # P2
+                          or idx =  (1, ("Z", 3), 2, ("R", 4)) # P3
+                          or idx =  (1, keyword("Z", 3), 
+                                     2, keyword("R", 4))       # P4
 
 Pros: 
     - Signature is unchanged; 
@@ -191,12 +206,15 @@ Pros:
       all keyword indexes would be dumped into the dictionary;
     - Stays within traditional types: tuples and dicts. Evt. OrderedDict;
     - Some proposed strategies are similar in behavior to a traditional function call;
+    - The C interface for PyObject_GetItem and family would remain unchanged.
 
 Cons: 
     - Apparenty complex and wasteful; 
     - Degeneracy in notation (e.g. a[Z=3] and a[{"Z":3}] are equivalent and
       indistinguishable notations at the __[get|set|del]item__ level).
-      This behavior may or may not be acceptable. 
+      This behavior may or may not be acceptable.
+    - for P4, an additional object similar in nature to slice() is needed,
+      but only to disambiguate the above degeneracy.
     - idx type and layout seems to change depending on the whims of the caller;
     - May be complex to parse what is passed, especially in the case of tuple of tuples;
     - P2 Creates a lot of single keys dictionary as members of a tuple. Looks ugly.
@@ -218,7 +236,7 @@ The signature would then be either
 
 Applied to our cases would produce:
 
-    C0. a[1,2]            -> idx=(1,2); kwargs={}
+    C0. a[1,2]            -> idx=(1,2);  kwargs={}
     C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
     C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
     C3. a[1, Z=3]         -> idx=1    ;  kwargs={"Z":3}
@@ -238,6 +256,8 @@ Pros:
 Cons: 
     - It doesn't preserve order, unless an OrderedDict is used;
     - Forbids C7, but is it really needed?
+    - Requires a change in the C interface to pass an additional
+      PyObject for the keyword arguments.
 
 Strategy 3: named tuple
 -----------------------
@@ -266,6 +286,7 @@ tuple.  It should be faster than creating many one element dictionaries, too.
 Pros: 
     - Looks really nice. namedtuple transparently replaces tuple and gracefully
       degrades to the old behavior.
+    - Does not require a change in the C interface
 
 Cons: 
     - According to some sources (Ref 3) namedtuple is not well developed.
@@ -289,13 +310,14 @@ Cons:
 C interface
 ===========
 
-Depending on the decision for the Python interface, the C interface would 
+As briefly introduced in the previous analysis, the C interface would 
 potentially have to change to allow the new feature. Specifically,
 PyObject_GetItem and related routines would have to accept an additional 
 PyObject *kw argument for Strategy 2. The remaining strategies would not
 require a change in the C function signatures, but the different nature of the
 passed object would potentially require adaptation. 
-Strategy 3 (namedtuple) implementation would behave correctly as the class
+
+Strategy 3 (namedtuple) would behave correctly without any change: the class
 returned by the factory method in collections returns a subclass of tuple,
 meaning that PyTuple_* functions can handle the resulting object.
 
@@ -334,6 +356,11 @@ objects for the keys), and accept to use ":" instead of "=".
 While clearly smart, this approach does not allow easy inquire of the key/value
 pair, it's too clever and esotheric, and does not allow to pass a slice as in
 a[K=1:10:2]
+
+However, Tim Delaney comments "I really do think that a[b=c, d=e] should just
+be syntax sugar for a['b':c, 'd':e]. It's simple to explain, and gives the
+greatest backwards compatibility. In particular, libraries that already abused
+slices in this way will just continue to work with the new syntax."
 
 Pass a dictionary as an additional index
 ----------------------------------------
