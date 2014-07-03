@@ -108,7 +108,7 @@ Specifications
 
 The implementation should try to preserve the current signature for
 __getitem__, or modify it in a backward-compatible way. We will present
-different alternatives, keeping into account the possible cases that need
+different alternatives, taking into account the possible cases that need
 to be addressed
 
     C0. a[1]; a[1,2]         # Traditional indexing
