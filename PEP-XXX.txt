@@ -320,7 +320,7 @@ labels must be specified.
 
     C0. a[1]; a[1,2]      -> idx = 1; idx=(1, 2)
     C1. a[Z=3]            -> idx = {"Z": 3}
-    C2. a[Z=3, R=4]       -> idx = {"Z"=3, "R"=4}
+    C2. a[Z=3, R=4]       -> idx = {"Z": 3, "R": 4}
     C3. a[1, Z=3]         -> raise SyntaxError
     C4. a[1, Z=3, R=4]    -> raise SyntaxError
     C5. a[1, 2, Z=3]      -> raise SyntaxError
