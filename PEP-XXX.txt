@@ -35,9 +35,9 @@ keyword arguments in the indexing operation, e.g.
     >>> a[K=3]
     >>> a[3,R=3,K=4]
 
-The following practical use cases for this notation present two broad categories
-of usage of a keyworded specification in indexing: as a named index, and as an
-option contextual to the indexing. Specifically:
+which would allow to refer to axes by conventional names.
+The following practical use cases for this notation present two broad
+categories of usage of a keyworded specification in indexing:
 
 1. In some domain, such as computational physics and chemistry, the use of a
 notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
@@ -57,6 +57,9 @@ row 5:8 to element 2) and each column is associated to a given degree of accurac
 
     >>> gridValues[x=3, y=5, z=8]
     >>> rain[time=0:12, location=location]
+
+Additionally, the keyword specification can be used as an option contextual to
+the indexing. Specifically:
 
 3. A "default" option allows to specify a default return value when the index
    is not present
@@ -222,7 +225,6 @@ Cons:
       preserves order (unlike the regular dict), but would result in clumsy 
       extraction of keywords.
 
-
 Strategy 2: kwargs argument
 ---------------------------
 
@@ -306,6 +308,42 @@ Cons:
       we can pre-define argument names so that keyword arguments are properly
       matched. Not so in __getitem__, leaving the task for interpreting and
       matching to __getitem__ itself.
+
+Strategy 4: Strict dictionary
+-----------------------------
+
+This strategy accepts that __getitem__ is special in accepting only one object,
+and the nature of that object must be non-ambiguous in its specification of the
+axes: it can be either by order, or by name.  As a result of this assumption,
+in presence of keyword arguments, the passed entity is a dictionary and all
+labels must be specified.
+
+    C0. a[1]; a[1,2]      -> idx = 1; idx=(1, 2)
+    C1. a[Z=3]            -> idx = {"Z": 3}
+    C2. a[Z=3, R=4]       -> idx = {"Z"=3, "R"=4}
+    C3. a[1, Z=3]         -> raise SyntaxError
+    C4. a[1, Z=3, R=4]    -> raise SyntaxError
+    C5. a[1, 2, Z=3]      -> raise SyntaxError
+    C6. a[1, 2, Z=3, R=4] -> raise SyntaxError
+    C7. a[1, Z=3, 2, R=4] -> raise SyntaxError
+
+
+Pros:
+    - strong conceptual similarity between the tuple case and the dictionary case.
+      In the first case, we are specifying a tuple, so we are naturally defining
+      a plain set of values separated by commas. In the second, we are specifying a
+      dictionary, so we are specifying a homogeneous set of key/value pairs, as
+      in dict(Z=3, R=4)
+    - simple and easy to parse on the __getitem__ side: if it gets a tuple, 
+      determine the axes using positioning. If it gets a dictionary, use 
+      the keywords.
+    - C interface does not need changes.
+
+Cons:
+    - degeneracy of a[{"Z": 3, "R": 4}] with a[Z=3, R=4], but the same degeneracy exists
+      for a[(2,3)] and a[2,3].
+    - very strict.
+    - destroys the use case a[1, 2, default=5]
 
 C interface
 ===========
