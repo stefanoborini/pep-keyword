@@ -44,51 +44,51 @@ The following practical use cases for this notation present two broad
 categories of usage of a keyworded specification in indexing:
 
 1. In some domain, such as computational physics and chemistry, the use of a
-notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
-a level of accuracy
+   notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
+   a level of accuracy
 
-::
+   ::
 
-    >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
+     >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
-In this case, the index operation would return a basis set at the chosen level
-of accuracy (represented by the parameter Z). The reason behind an indexing is that
-the BasisSet object could be internally represented as a numeric table, where
-rows are associated to individual elements (e.g. row 0:5 to element 1, 
-row 5:8 to element 2) and each column is associated to a given degree of accuracy
-(e.g. first column is low accuracy, second column is medium accuracy etc).
+   In this case, the index operation would return a basis set at the chosen level
+   of accuracy (represented by the parameter Z). The reason behind an indexing is that
+   the BasisSet object could be internally represented as a numeric table, where
+   rows are associated to individual elements (e.g. row 0:5 to element 1, 
+   row 5:8 to element 2) and each column is associated to a given degree of accuracy
+   (e.g. first column is low accuracy, second column is medium accuracy etc).
 
 2. To provide a more communicative meaning to the index, preventing e.g. accidental
    inversion of indexes
 
-::
+   ::
 
-    >>> gridValues[x=3, y=5, z=8]
-    >>> rain[time=0:12, location=location]
+     >>> gridValues[x=3, y=5, z=8]
+     >>> rain[time=0:12, location=location]
 
-Additionally, the keyword specification can be used as an option contextual to
-the indexing. Specifically:
+   Additionally, the keyword specification can be used as an option contextual to
+   the indexing. Specifically:
 
 3. A "default" option allows to specify a default return value when the index
    is not present
 
-::
+   ::
 
-    >>> lst = [1, 2, 3]
-    >>> value = lst[5, default=0]  # value is 0
+     >>> lst = [1, 2, 3]
+     >>> value = lst[5, default=0]  # value is 0
 
 4. For a sparse dataset, to specify an interpolation strategy 
    to infer a missing point from e.g. its surrounding data.
 
-::
+   ::
 
-    >>> value = array[1, 3, interpolate=spline_interpolator]
+     >>> value = array[1, 3, interpolate=spline_interpolator]
 
 5. A unit could be specified with the same mechanism
 
-::
+   ::
 
-    >>> value = array[1, 3, unit="degrees"]
+     >>> value = array[1, 3, unit="degrees"]
 
 How the notation is interpreted is up to the implementing class. 
 
@@ -149,9 +149,6 @@ they are grouped in a tuple and this tuple is passed to ``__getitem__`` as the
 single argument idx. Strategy 1 keeps the current signature, but expands the
 range of variability in type and contents of idx. 
 
-This strategy has a fundamental flaw in having degenerate notations, but this
-flaw can be overlooked by accepting the equivalency of the representations. 
-
 We identify four possible ways to implement this Strategy:
 
 ::
@@ -161,7 +158,11 @@ We identify four possible ways to implement this Strategy:
     P3: similar to P2, but replaces single-item dictionaries with a (key, value) tuple.
     P4: similar to P2, but uses a special and additional new object: keyword()
 
-The old behavior for C0 is unchanged.
+Some of these possibilities lead to degenerate notations, i.e.
+indistinguishable from an already possible representation. In other words, the
+proposed notation becomes syntactic sugar for these representations.
+
+Under Strategy 1, the old behavior for C0 is unchanged.
 
 ::
 
@@ -179,25 +180,25 @@ because otherwise we cannot differentiate ``a["Z", 3]`` from ``a[Z=3]``.
                     or idx = keyword("Z", 3)      # P4 keyword object 
 
 As you can see, notation P1/P2 implies that ``a[Z=3]`` and ``a[{"Z": 3}]`` will
-call ``__getitem__`` passing the exact same value. This pervasive problem is
-present throughout this Strategy in different forms. Using a keyword object
-would solve this degeneracy.
+call ``__getitem__`` passing the exact same value, and is therefore syntactic
+sugar for the latter. Same situation occurs, although with different index, for
+P3. Using a keyword object as in P4 would remove this degeneracy.
 
 For the C2 case:
 
 ::
 
-    C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
-                    or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
+    C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict 
+                    or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict 
                     or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
                     or idx = (keyword("Z", 3), 
                               keyword("R", 4) )   # P4 keyword objects
 
 
-P1 naturally maps to the traditional ``**kwargs`` behavior, however it breaks the 
-convention that two or more entries for the index produce a tuple. 
-P2 preserves this behavior, and additionally preserves the order. 
-Preserving the order would also be possible with an OrderedDict as drafted by PEP-468.
+P1 naturally maps to the traditional ``**kwargs`` behavior, however it breaks
+the convention that two or more entries for the index produce a tuple.  P2
+preserves this behavior, and additionally preserves the order.  Preserving the
+order would also be possible with an OrderedDict as drafted by PEP-468 [#PEP-468]_.
 
 The remaining cases are here shown:
 
@@ -468,11 +469,11 @@ Relevance of ordering of keyword arguments
 
 As part of the discussion of this PEP, it's important to decide if the ordering
 information of the keyword arguments is important, and if indexes and keys can
-be ordered in an arbitrary way (e.g. ``a[1,Z=3,2,R=4]``). PEP-468 tries to address
-the first point by proposing the use of an ordereddict, however one would be
-inclined to accept that keyword arguments in indexing are equivalent to kwargs
-in function calls, and therefore as of today equally unordered, and with the
-same restrictions.
+be ordered in an arbitrary way (e.g. ``a[1,Z=3,2,R=4]``). PEP-468 [#PEP-468]_
+tries to address the first point by proposing the use of an ordereddict,
+however one would be inclined to accept that keyword arguments in indexing are
+equivalent to kwargs in function calls, and therefore as of today equally
+unordered, and with the same restrictions.
 
 Need for homogeneity of behavior
 --------------------------------
@@ -539,6 +540,9 @@ References
 .. [4] "PEP pre-draft: Support for indexing with keyword arguments"
        https://mail.python.org/pipermail/python-ideas/2014-July/028250.html
 
+.. [#PEP-468] "Preserving the order of \*\*kwargs in a function." 
+              http://legacy.python.org/dev/peps/pep-0468/
+ 
 Copyright
 =========
 
