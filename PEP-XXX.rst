@@ -265,7 +265,7 @@ The signature would then be either
 ::
 
     __getitem__(self, idx) 
-    __getitem__(self, idx, **kwargs), 
+    __getitem__(self, idx, **kwargs)
     __getitem__(self, **kwargs) 
 
 Applied to our cases would produce:
@@ -286,7 +286,7 @@ Empty indexing ``a[]`` of course remains invalid syntax.
 Pros
 '''' 
 - Similar to function call, evolves naturally from it;
-- Use of keyword indexing with an object whose __getitem__ 
+- Use of keyword indexing with an object whose ``__getitem__``
   doesn't have a kwargs will fail in an obvious way.
   That's not the case for the other strategies.
 
@@ -376,8 +376,8 @@ Pros
   In the first case, we are specifying a tuple, so we are naturally defining
   a plain set of values separated by commas. In the second, we are specifying a
   dictionary, so we are specifying a homogeneous set of key/value pairs, as
-  in dict(Z=3, R=4)
-- Simple and easy to parse on the __getitem__ side: if it gets a tuple, 
+  in ``dict(Z=3, R=4)``;
+- Simple and easy to parse on the ``__getitem__`` side: if it gets a tuple, 
   determine the axes using positioning. If it gets a dictionary, use 
   the keywords.
 - C interface does not need changes.
@@ -398,7 +398,7 @@ potentially have to change to allow the new feature. Specifically,
 require a change in the C function signatures, but the different nature of the
 passed object would potentially require adaptation. 
 
-Strategy 3 (namedtuple) would behave correctly without any change: the class
+Strategy 3 (named tuple) would behave correctly without any change: the class
 returned by the factory method in collections returns a subclass of tuple,
 meaning that ``PyTuple_*`` functions can handle the resulting object.
 
