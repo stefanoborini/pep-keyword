@@ -26,6 +26,7 @@ The current syntax of the indexing operation provides the following
 strategies for access 
 
 ::
+
     >>> a[3]       # returns the fourth element of a
     >>> a[1:10:2]  # slice notation (extract a subset of the data)
     >>> a[3,2]     # multiple indexes (for multidimensional arrays)
@@ -34,6 +35,7 @@ The additional notation proposed in this PEP would allow notations involving
 keyword arguments in the indexing operation, e.g.
 
 ::
+
     >>> a[K=3]
     >>> a[3,R=3,K=4]
 
@@ -46,6 +48,7 @@ notation such as Basis[Z=5] is a Domain Specific Language notation to represent
 a level of accuracy
 
 ::
+
     >>> low_accuracy_energy = computeEnergy(molecule, BasisSet[Z=3])
 
 In this case, the index operation would return a basis set at the chosen level
@@ -59,6 +62,7 @@ row 5:8 to element 2) and each column is associated to a given degree of accurac
    inversion of indexes
 
 ::
+
     >>> gridValues[x=3, y=5, z=8]
     >>> rain[time=0:12, location=location]
 
@@ -69,6 +73,7 @@ the indexing. Specifically:
    is not present
 
 ::
+
     >>> lst = [1, 2, 3]
     >>> value = lst[5, default=0]  # value is 0
 
@@ -76,11 +81,13 @@ the indexing. Specifically:
    to infer a missing point from e.g. its surrounding data.
 
 ::
+
     >>> value = array[1, 3, interpolate=spline_interpolator]
 
 5. A unit could be specified with the same mechanism
 
 ::
+
     >>> value = array[1, 3, unit="degrees"]
 
 How the notation is interpreted is up to the implementing class. 
@@ -122,6 +129,7 @@ different alternatives, taking into account the possible cases that need
 to be addressed
 
 ::
+
     C0. a[1]; a[1,2]         # Traditional indexing
     C1. a[Z=3] 
     C2. a[Z=3, R=4]
@@ -147,6 +155,7 @@ flaw can be overlooked by accepting the equivalency of the representations.
 We identify four possible ways to implement this Strategy:
 
 ::
+
     P1: uses a single dictionary for the keyword arguments. 
     P2: uses individual single-item dictionaries
     P3: similar to P2, but replaces single-item dictionaries with a (key, value) tuple.
@@ -155,6 +164,7 @@ We identify four possible ways to implement this Strategy:
 The old behavior for C0 is unchanged.
 
 ::
+
     C0: a[1]        -> idx = 1                    # integer
         a[1,2]      -> idx = (1,2)                # tuple
 
@@ -163,6 +173,7 @@ for the specific indexing entry. We need to have a tuple with a tuple in C1
 because otherwise we cannot differentiate ``a["Z", 3]`` from ``a[Z=3]``. 
 
 ::
+
     C1: a[Z=3]      -> idx = {"Z": 3}             # P1/P2 dictionary with single key
                     or idx = (("Z", 3),)          # P3 tuple of tuples 
                     or idx = keyword("Z", 3)      # P4 keyword object 
@@ -175,6 +186,7 @@ would solve this degeneracy.
 For the C2 case:
 
 ::
+
     C2. a[Z=3, R=4] -> idx = {"Z": 3, "R": 4}     # P1 dictionary/ordereddict [**]
                     or idx = ({"Z": 3}, {"R": 4}) # P2 tuple of two single-key dict [***]
                     or idx = (("Z", 3), ("R", 4)) # P3 tuple of tuples 
@@ -190,6 +202,7 @@ Preserving the order would also be possible with an OrderedDict as drafted by PE
 The remaining cases are here shown:
 
 ::
+
     C3. a[1, Z=3]   -> idx = (1, {"Z": 3})                     # P1/P2
                     or idx = (1, ("Z", 3))                     # P3
                     or idx = (1, keyword("Z", 3))              # P4
@@ -250,6 +263,7 @@ idx also becomes optional to support a case where no non-keyword arguments are a
 The signature would then be either 
 
 ::
+
     __getitem__(self, idx) 
     __getitem__(self, idx, **kwargs), 
     __getitem__(self, **kwargs) 
@@ -257,6 +271,7 @@ The signature would then be either
 Applied to our cases would produce:
 
 ::
+
     C0. a[1,2]            -> idx=(1,2);  kwargs={}
     C1. a[Z=3]            -> idx=None ;  kwargs={"Z":3}
     C2. a[Z=3, R=4]       -> idx=None ;  kwargs={"Z":3, "R":4}
@@ -290,6 +305,7 @@ obviousely have their key as key, and positional argument would have an
 underscore followed by their order:
 
 ::
+
     C0. a[1]; a[1,2]      -> idx = 1; idx=(_0=1, _1=2)
     C1. a[Z=3]            -> idx = (Z=3)
     C2. a[Z=3, R=2]       -> idx = (Z=3, R=2)
@@ -343,6 +359,7 @@ in presence of keyword arguments, the passed entity is a dictionary and all
 labels must be specified.
 
 ::
+
     C0. a[1]; a[1,2]      ->  idx = 1; idx=(1, 2)
     C1. a[Z=3]            -> idx = {"Z": 3}
     C2. a[Z=3, R=4]       -> idx = {"Z": 3, "R": 4}
@@ -412,6 +429,7 @@ that one accepts to use strings (or instantiate properly named placeholder
 objects for the keys), and accept to use ":" instead of "=".
 
 ::
+
     >>> a["K":3]
     slice('K', 3, None)
     >>> a["K":3, "R":4]
@@ -433,6 +451,7 @@ Pass a dictionary as an additional index
 ----------------------------------------
 
 ::
+
     >>> a[1, 2, {"K": 3}]
 
 this notation, although less elegant, can already be used and achieves similar
