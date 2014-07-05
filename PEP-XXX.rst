@@ -15,9 +15,11 @@ Abstract
 ========
 
 This PEP proposes an extension of the indexing operation to support keyword
-arguments.  Notations in the form ``a[K=3]``, or ``a[1:2, K=3, R=4]`` would
-become legal syntax. In addition to a change in the parser, the index protocol
-(``__getitem__``, ``__setitem__`` and ``__delitem__``) will also require adaptation. 
+arguments. Notations in the form ``a[K=3,R=2]`` would become legal syntax.
+For future-proofing considerations, ``a[1:2, K=3, R=4]`` may be allowed as well,
+depending on the choice for implementation. In addition to a change in the parser, 
+the index protocol (``__getitem__``, ``__setitem__`` and ``__delitem__``) will 
+also require adaptation.
 
 Motivation
 ==========
@@ -36,10 +38,16 @@ keyword arguments in the indexing operation, e.g.
 
 ::
 
-    >>> a[K=3]
+    >>> a[K=3, R=2]
+
+which would allow to refer to axes by conventional names. 
+One could consider an extended form that allows both positional and keyword
+arguments
+
+::
     >>> a[3,R=3,K=4]
 
-which would allow to refer to axes by conventional names.
+
 The following practical use cases for this notation present two broad
 categories of usage of a keyworded specification in indexing:
 
@@ -66,10 +74,11 @@ categories of usage of a keyworded specification in indexing:
      >>> gridValues[x=3, y=5, z=8]
      >>> rain[time=0:12, location=location]
 
-   Additionally, the keyword specification can be used as an option contextual to
-   the indexing. Specifically:
 
-3. A "default" option allows to specify a default return value when the index
+Additionally, the keyword specification can be used as an option contextual to
+the indexing. Specifically:
+
+1. A "default" option allows to specify a default return value when the index
    is not present
 
    ::
@@ -77,14 +86,14 @@ categories of usage of a keyworded specification in indexing:
      >>> lst = [1, 2, 3]
      >>> value = lst[5, default=0]  # value is 0
 
-4. For a sparse dataset, to specify an interpolation strategy 
+2. For a sparse dataset, to specify an interpolation strategy 
    to infer a missing point from e.g. its surrounding data.
 
    ::
 
      >>> value = array[1, 3, interpolate=spline_interpolator]
 
-5. A unit could be specified with the same mechanism
+3. A unit could be specified with the same mechanism
 
    ::
 
@@ -141,26 +150,73 @@ to be addressed
 
 The possible strategies are:
 
-Strategy 1: Same signature, new argument contents.
+Strategy "Strict dictionary"
+-----------------------------
+
+This strategy acknowledges that ``__getitem__`` is special in accepting only one object,
+and the nature of that object must be non-ambiguous in its specification of the
+axes: it can be either by order, or by name.  As a result of this assumption,
+in presence of keyword arguments, the passed entity is a dictionary and all
+labels must be specified.
+
+::
+
+    C0. a[1]; a[1,2]      ->  idx = 1; idx=(1, 2)
+    C1. a[Z=3]            -> idx = {"Z": 3}
+    C2. a[Z=3, R=4]       -> idx = {"Z": 3, "R": 4}
+    C3. a[1, Z=3]         -> raise SyntaxError
+    C4. a[1, Z=3, R=4]    -> raise SyntaxError
+    C5. a[1, 2, Z=3]      -> raise SyntaxError
+    C6. a[1, 2, Z=3, R=4] -> raise SyntaxError
+    C7. a[1, Z=3, 2, R=4] -> raise SyntaxError
+
+Pros
+''''
+
+- Strong conceptual similarity between the tuple case and the dictionary case.
+  In the first case, we are specifying a tuple, so we are naturally defining
+  a plain set of values separated by commas. In the second, we are specifying a
+  dictionary, so we are specifying a homogeneous set of key/value pairs, as
+  in ``dict(Z=3, R=4)``;
+- Simple and easy to parse on the ``__getitem__`` side: if it gets a tuple, 
+  determine the axes using positioning. If it gets a dictionary, use 
+  the keywords.
+- C interface does not need changes.
+
+Neutral
+'''''''
+
+- Degeneracy of ``a[{"Z": 3, "R": 4}]`` with ``a[Z=3, R=4]`` means the notation
+  is syntactic sugar.
+
+Cons
+''''
+
+- Very strict.
+- Destroys ordering of the passed arguments. Preserving the
+  order would be possible with an OrderedDict as drafted by PEP-468 [#PEP-468]_.
+- Does not allow the use case ``a[1, 2, default=5]``
+
+Strategy "New argument contents"
 --------------------------------------------------
 
 In the current implementation, when many arguments are passed to ``__getitem__``,
 they are grouped in a tuple and this tuple is passed to ``__getitem__`` as the 
-single argument idx. Strategy 1 keeps the current signature, but expands the
-range of variability in type and contents of idx. 
+single argument ``idx``. This strategy keeps the current signature, but expands the
+range of variability in type and contents of idx to more complex representations. 
 
-We identify four possible ways to implement this Strategy:
+We identify four possible ways to implement this strategy:
 
 - **P1**: uses a single dictionary for the keyword arguments. 
 - **P2**: uses individual single-item dictionaries.
 - **P3**: similar to **P2**, but replaces single-item dictionaries with a ``(key, value)`` tuple.
 - **P4**: similar to **P2**, but uses a special and additional new object: ``keyword()``
 
-Some of these possibilities lead to degenerate notations, i.e.
-indistinguishable from an already possible representation. In other words, the
-proposed notation becomes syntactic sugar for these representations.
+Some of these possibilities lead to degenerate notations, i.e. indistinguishable 
+from an already possible representation. Once again, the proposed notation 
+becomes syntactic sugar for these representations.
 
-Under Strategy 1, the old behavior for C0 is unchanged.
+Under this strategy, the old behavior for C0 is unchanged.
 
 ::
 
@@ -258,7 +314,7 @@ Strategy 2: kwargs argument
 ---------------------------
 
 ``__getitem__`` accepts an optional ``**kwargs`` argument which should be keyword only. 
-idx also becomes optional to support a case where no non-keyword arguments are allowed.
+``idx`` also becomes optional to support a case where no non-keyword arguments are allowed.
 The signature would then be either 
 
 ::
@@ -278,7 +334,7 @@ Applied to our cases would produce:
     C4. a[1, Z=3, R=4]    -> idx=1    ;  kwargs={"Z":3, "R":4} 
     C5. a[1, 2, Z=3]      -> idx=(1,2);  kwargs={"Z":3}
     C6. a[1, 2, Z=3, R=4] -> idx=(1,2);  kwargs={"Z":3, "R":4}
-    C7. a[1, Z=3, 2, R=4] -> forbidden in agreement to function behavior
+    C7. a[1, Z=3, 2, R=4] -> raise SyntaxError # in agreement to function behavior
 
 Empty indexing ``a[]`` of course remains invalid syntax.
 
@@ -296,10 +352,10 @@ Cons
 - Requires a change in the C interface to pass an additional
   PyObject for the keyword arguments.
 
-Strategy 3: named tuple
+Strategy "named tuple"
 -----------------------
 
-Return a namedtuple for idx instead of a tuple.  Keyword arguments would
+Return a named tuple for idx instead of a tuple.  Keyword arguments would
 obviousely have their key as key, and positional argument would have an
 underscore followed by their order:
 
@@ -348,44 +404,6 @@ Cons
   matched. Not so in ``__getitem__``, leaving the task for interpreting and
   matching to ``__getitem__`` itself.
 
-Strategy 4: Strict dictionary
------------------------------
-
-This strategy accepts that ``__getitem__`` is special in accepting only one object,
-and the nature of that object must be non-ambiguous in its specification of the
-axes: it can be either by order, or by name.  As a result of this assumption,
-in presence of keyword arguments, the passed entity is a dictionary and all
-labels must be specified.
-
-::
-
-    C0. a[1]; a[1,2]      ->  idx = 1; idx=(1, 2)
-    C1. a[Z=3]            -> idx = {"Z": 3}
-    C2. a[Z=3, R=4]       -> idx = {"Z": 3, "R": 4}
-    C3. a[1, Z=3]         -> raise SyntaxError
-    C4. a[1, Z=3, R=4]    -> raise SyntaxError
-    C5. a[1, 2, Z=3]      -> raise SyntaxError
-    C6. a[1, 2, Z=3, R=4] -> raise SyntaxError
-    C7. a[1, Z=3, 2, R=4] -> raise SyntaxError
-
-
-Pros
-''''
-- Strong conceptual similarity between the tuple case and the dictionary case.
-  In the first case, we are specifying a tuple, so we are naturally defining
-  a plain set of values separated by commas. In the second, we are specifying a
-  dictionary, so we are specifying a homogeneous set of key/value pairs, as
-  in ``dict(Z=3, R=4)``;
-- Simple and easy to parse on the ``__getitem__`` side: if it gets a tuple, 
-  determine the axes using positioning. If it gets a dictionary, use 
-  the keywords.
-- C interface does not need changes.
-
-Cons
-''''
-- Degeneracy of ``a[{"Z": 3, "R": 4}]`` with ``a[Z=3, R=4]``
-- Very strict.
-- Destroys the use case ``a[1, 2, default=5]``
 
 C interface
 ===========
@@ -397,7 +415,7 @@ potentially have to change to allow the new feature. Specifically,
 require a change in the C function signatures, but the different nature of the
 passed object would potentially require adaptation. 
 
-Strategy 3 (named tuple) would behave correctly without any change: the class
+Strategy "named tuple" would behave correctly without any change: the class
 returned by the factory method in collections returns a subclass of tuple,
 meaning that ``PyTuple_*`` functions can handle the resulting object.
 
@@ -441,10 +459,10 @@ pair, it's too clever and esotheric, and does not allow to pass a slice as in
 
 However, Tim Delaney comments 
 
-> "I really do think that ``a[b=c, d=e]`` should just be syntax sugar for 
-> ``a['b':c, 'd':e]``. It's simple to explain, and gives the greatest backwards 
-> compatibility. In particular, libraries that already abused slices in this 
-> way will just continue to work with the new syntax."
+    "I really do think that ``a[b=c, d=e]`` should just be syntax sugar for 
+    ``a['b':c, 'd':e]``. It's simple to explain, and gives the greatest backwards 
+    compatibility. In particular, libraries that already abused slices in this 
+    way will just continue to work with the new syntax."
 
 Pass a dictionary as an additional index
 ----------------------------------------
