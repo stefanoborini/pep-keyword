@@ -151,11 +151,10 @@ range of variability in type and contents of idx.
 
 We identify four possible ways to implement this Strategy:
 
-
-:**P1**: uses a single dictionary for the keyword arguments. 
-:**P2**: uses individual single-item dictionaries.
-:**P3**: similar to **P2**, but replaces single-item dictionaries with a ``(key, value)`` tuple.
-:**P4**: similar to **P2**, but uses a special and additional new object: ``keyword()``
+ - **P1**: uses a single dictionary for the keyword arguments. 
+ - **P2**: uses individual single-item dictionaries.
+ - **P3**: similar to **P2**, but replaces single-item dictionaries with a ``(key, value)`` tuple.
+ - **P4**: similar to **P2**, but uses a special and additional new object: ``keyword()``
 
 Some of these possibilities lead to degenerate notations, i.e.
 indistinguishable from an already possible representation. In other words, the
