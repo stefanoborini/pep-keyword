@@ -16,10 +16,10 @@ Abstract
 
 This PEP proposes an extension of the indexing operation to support keyword
 arguments. Notations in the form ``a[K=3,R=2]`` would become legal syntax.
-For future-proofing considerations, ``a[1:2, K=3, R=4]`` may be allowed as well,
-depending on the choice for implementation. In addition to a change in the parser, 
-the index protocol (``__getitem__``, ``__setitem__`` and ``__delitem__``) will 
-also potentially require adaptation.
+For future-proofing considerations, ``a[1:2, K=3, R=4]`` are considered and 
+may be allowed as well, depending on the choice for implementation. In addition
+to a change in the parser, the index protocol (``__getitem__``, ``__setitem__``
+and ``__delitem__``) will also potentially require adaptation.
 
 Motivation
 ==========
@@ -31,8 +31,8 @@ to refer to this data.
 
 As a general observation, the number of indices needed by an indexing operation
 depends on the dimensionality of the data: one-dimensional data (e.g. a list)
-requires one index (e.g. a[3]), two-dimensional data (e.g. a matrix) requires
-two indices (e.g. a[2,3]) and so on. Each index is a selector along one of the
+requires one index (e.g. ``a[3]``), two-dimensional data (e.g. a matrix) requires
+two indices (e.g. ``a[2,3]``) and so on. Each index is a selector along one of the
 axes of the dimensionality, and the position in the index tuple is the
 metainformation needed to associate each index to the corresponding axis.
 
@@ -55,8 +55,8 @@ keyword arguments in the indexing operation, e.g.
 
 which would allow to refer to axes by conventional names. 
 
-One could also consider an extended form that allows both positional and
-keyword specification
+One must additionally consider the extended form that allows both positional
+and keyword specification
 
 ::
     >>> a[3,R=3,K=4]
@@ -69,8 +69,16 @@ Use cases
 The following practical use cases present two broad categories of usage of a
 keyworded specification: Indexing and contextual option. For indexing:
 
-1. In some domain, such as computational physics and chemistry, the use of a
-   notation such as Basis[Z=5] is a Domain Specific Language notation to represent 
+1. To provide a more communicative meaning to the index, preventing e.g. accidental
+   inversion of indexes
+
+   ::
+
+     >>> gridValues[x=3, y=5, z=8]
+     >>> rain[time=0:12, location=location]
+
+2. In some domain, such as computational physics and chemistry, the use of a
+   notation such as ``Basis[Z=5]`` is a Domain Specific Language notation to represent 
    a level of accuracy
 
    ::
@@ -80,18 +88,13 @@ keyworded specification: Indexing and contextual option. For indexing:
    In this case, the index operation would return a basis set at the chosen level
    of accuracy (represented by the parameter Z). The reason behind an indexing is that
    the BasisSet object could be internally represented as a numeric table, where
-   rows (the "coefficient" axis) are associated to individual elements (e.g. row 0:5 
-   contains coefficients for element 1, row 5:8 coefficients for element 2) and 
-   each column is associated to a given degree of accuracy ("accuracy" or "Z" axis) 
-   (e.g. first column is low accuracy, second column is medium accuracy etc).
-
-2. To provide a more communicative meaning to the index, preventing e.g. accidental
-   inversion of indexes
-
-   ::
-
-     >>> gridValues[x=3, y=5, z=8]
-     >>> rain[time=0:12, location=location]
+   rows (the "coefficient" axis, hidden to the user in this example) are associated 
+   to individual elements (e.g. row 0:5 contains coefficients for element 1,
+   row 5:8 coefficients for element 2) and each column is associated to a given
+   degree of accuracy ("accuracy" or "Z" axis) so that first column is low
+   accuracy, second column is medium accuracy and so on. With that indexing, 
+   the user would obtain another object representing the contents of the column
+   of the internal table for accuracy level 3.
 
 Additionally, the keyword specification can be used as an option contextual to
 the indexing. Specifically:
@@ -142,10 +145,11 @@ object passed to argument ``idx``:
 Except for its unique ability to handle slice notation, the indexing operation
 has similarities to a plain method call: it acts like one when invoked with
 only one element; If the number of elements is greater than one, the ``idx``
-argument behaves like a ``*args``. However, an indexing operation has the strong
-semantic implication of extraction of a subset out of a larger set, which is
-not automatically associated to a regular method call unless appropriate naming
-is chosen. Moreover, its different visual style is important for readability.
+argument behaves like a ``*args``. However, as stated in the Motivation section,
+an indexing operation has the strong semantic implication of extraction of a
+subset out of a larger set, which is not automatically associated to a regular
+method call unless appropriate naming is chosen. Moreover, its different visual
+style is important for readability.
 
 Specifications
 ==============
@@ -167,7 +171,7 @@ to be addressed
     C7. a[1, Z=3, 2, R=4]    # Interposed ordering
 
 Strategy "Strict dictionary"
------------------------------
+----------------------------
 
 This strategy acknowledges that ``__getitem__`` is special in accepting only
 one object, and the nature of that object must be non-ambiguous in its
@@ -214,11 +218,39 @@ Cons
 - Does not allow use cases with mixed positional/keyword arguments such as 
   ``a[1, 2, default=5]``.
 
+Strategy "mixed dictionary"
+---------------------------
+
+This strategy relaxes the above constraint to return a dictionary containing
+both numbers and strings as keys.
+
+::
+
+    C0. a[1]; a[1,2]      -> idx = 1; idx = (1, 2)
+    C1. a[Z=3]            -> idx = {"Z": 3}
+    C2. a[Z=3, R=4]       -> idx = {"Z": 3, "R": 4}
+    C3. a[1, Z=3]         -> idx = { 0: 1, "Z": 3}
+    C4. a[1, Z=3, R=4]    -> idx = { 0: 1, "Z": 3, "R": 4}
+    C5. a[1, 2, Z=3]      -> idx = { 0: 1, 1: 2, "Z": 3}
+    C6. a[1, 2, Z=3, R=4] -> idx = { 0: 1, 1: 2, "Z": 3, "R": 4}
+    C7. a[1, Z=3, 2, R=4] -> idx = { 0: 1, "Z": 3, 2: 2, "R": 4}
+
+Pros
+''''
+- Opens for mixed cases.
+
+Cons
+''''
+- Destroys ordering information for string keys. We have no way of saying if
+  ``"Z"`` in C7 was in position 1 or 3.
+- Implies switching from a tuple to a dict as soon as one specified index
+  has a keyword argument. May be confusing to parse.
+
 Strategy "named tuple"
 -----------------------
 
 Return a named tuple for ``idx`` instead of a tuple.  Keyword arguments would
-obviously have their key as key, and positional argument would have an
+obviously have their stated name as key, and positional argument would have an
 underscore followed by their order:
 
 ::
@@ -268,7 +300,7 @@ Cons
 
 
 Strategy "New argument contents"
---------------------------------------------------
+--------------------------------
 
 In the current implementation, when many arguments are passed to ``__getitem__``,
 they are grouped in a tuple and this tuple is passed to ``__getitem__`` as the 
@@ -473,7 +505,7 @@ objects for the keys), and accept to use ":" instead of "=".
 
 While clearly smart, this approach does not allow easy inquire of the key/value
 pair, it's too clever and esotheric, and does not allow to pass a slice as in
-``a[K=1:10:2]``
+``a[K=1:10:2]``.
 
 However, Tim Delaney comments 
 
@@ -546,6 +578,13 @@ Chris Angelico also states:
     carried very differently"." Again, we agree on this point.  The most
     straightforward strategy to keep homogeneity would be Strategy "kwargs
     argument", opening to a ``**kwargs`` argument on ``__getitem__``.
+
+One of the authors (Stefano Borini) thinks that only the "strict dictionary"
+strategy is worth of implementation. It is non-ambiguous, simple, does not
+force complex parsing, and addresses the problem of referring to axes either
+by position or by name. The "options" use case is probably best handled with
+a different approach, and may be irrelevant for this PEP. The alternative
+"named tuple" is another valid choice. 
 
 Having .get() become obsolete for indexing with default fallback
 ----------------------------------------------------------------
