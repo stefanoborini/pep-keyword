@@ -19,15 +19,15 @@ arguments. Notations in the form ``a[K=3,R=2]`` would become legal syntax.
 For future-proofing considerations, ``a[1:2, K=3, R=4]`` may be allowed as well,
 depending on the choice for implementation. In addition to a change in the parser, 
 the index protocol (``__getitem__``, ``__setitem__`` and ``__delitem__``) will 
-also require adaptation.
+also potentially require adaptation.
 
 Motivation
 ==========
 
-The indexing operation syntax is associated to a strong semantic meaning that
-differentiates it from a method call: refering to a subset of data exposed by
-an object. We believe this semantic association to be important, and wish to 
-expand the strategies allowed to refer to this data.
+The indexing syntax carries a strong semantic content, differentiating it from
+a method call: it implies referring to a subset of data. We believe this
+semantic association to be important, and wish to expand the strategies allowed
+to refer to this data.
 
 As a general observation, the number of indices needed by an indexing operation
 depends on the dimensionality of the data: one-dimensional data (e.g. a list)
@@ -37,7 +37,7 @@ axes of the dimensionality, and the position in the index tuple is the
 metainformation needed to associate each index to the corresponding axis.
 
 The current python syntax focuses exclusively on position to express the
-association to the axes, and contains syntactic sugar to refer to
+association to the axes, and also contains syntactic sugar to refer to
 non-punctiform selection (slices)
 
 ::
@@ -80,8 +80,9 @@ keyworded specification: Indexing and contextual option. For indexing:
    In this case, the index operation would return a basis set at the chosen level
    of accuracy (represented by the parameter Z). The reason behind an indexing is that
    the BasisSet object could be internally represented as a numeric table, where
-   rows are associated to individual elements (e.g. row 0:5 to element 1, 
-   row 5:8 to element 2) and each column is associated to a given degree of accuracy
+   rows (the "coefficient" axis) are associated to individual elements (e.g. row 0:5 
+   contains coefficients for element 1, row 5:8 coefficients for element 2) and 
+   each column is associated to a given degree of accuracy ("accuracy" or "Z" axis) 
    (e.g. first column is low accuracy, second column is medium accuracy etc).
 
 2. To provide a more communicative meaning to the index, preventing e.g. accidental
@@ -247,7 +248,7 @@ Pros
 
 Cons 
 ''''
-- According to some sources [3]_ namedtuple is not well developed.
+- According to some sources [#namedtuple]_ namedtuple is not well developed.
   To include it as such important object would probably require rework
   and improvement;
 - The namedtuple fields, and thus the type, will have to change according
@@ -379,7 +380,7 @@ Cons
   preserves order (unlike the regular dict), but would result in clumsy 
   extraction of keywords.
 
-Strategy 2: kwargs argument
+Strategy "kwargs argument"
 ---------------------------
 
 ``__getitem__`` accepts an optional ``**kwargs`` argument which should be keyword only. 
@@ -428,9 +429,9 @@ C interface
 As briefly introduced in the previous analysis, the C interface would 
 potentially have to change to allow the new feature. Specifically,
 ``PyObject_GetItem`` and related routines would have to accept an additional 
-``PyObject *kw`` argument for Strategy 2. The remaining strategies would not
-require a change in the C function signatures, but the different nature of the
-passed object would potentially require adaptation. 
+``PyObject *kw`` argument for Strategy "kwargs argument". The remaining
+strategies would not require a change in the C function signatures, but the
+different nature of the passed object would potentially require adaptation. 
 
 Strategy "named tuple" would behave correctly without any change: the class
 returned by the factory method in collections returns a subclass of tuple,
@@ -504,8 +505,8 @@ Pass a dictionary as an additional index
     >>> a[1, 2, {"K": 3}]
 
 this notation, although less elegant, can already be used and achieves similar
-results. It's evident that the proposed Strategy 1 can be interpreted as
-syntactic sugar for this notation.
+results. It's evident that the proposed Strategy "New argument contents" can be
+interpreted as syntactic sugar for this notation.
 
 Additional Comments 
 ===================
@@ -526,13 +527,16 @@ unordered, and with the same restrictions.
 Need for homogeneity of behavior
 --------------------------------
 
-Relative to Strategy 1, a comment from Ian Cordasco points out that "it would
-be unreasonable for just one method to behave totally differently from the
-standard behaviour in Python.  It would be confusing for only ``__getitem__`` (and
-ostensibly, ``__setitem__``) to take keyword arguments but instead of turning them
-into a dictionary, turn them into individual single-item dictionaries." We
-agree with his point, however it must be pointed out that ``__getitem__`` is
-already special in some regards when it comes to passed arguments.
+Relative to Strategy "New argument contents", a comment from Ian Cordasco
+points out that 
+
+    "it would be unreasonable for just one method to behave totally
+    differently from the standard behaviour in Python.  It would be confusing for
+    only ``__getitem__`` (and ostensibly, ``__setitem__``) to take keyword
+    arguments but instead of turning them into a dictionary, turn them into
+    individual single-item dictionaries." We agree with his point, however it must
+    be pointed out that ``__getitem__`` is already special in some regards when it
+    comes to passed arguments.
 
 Chris Angelico also states: 
 
@@ -540,8 +544,8 @@ Chris Angelico also states:
     option to carry keyword args, just like with function calls", and then come
     back and say "oh, but unlike function calls, they're inherently ordered and
     carried very differently"." Again, we agree on this point.  The most
-    straightforward strategy to keep homogeneity would be Strategy 2, opening to a
-    ``**kwargs`` argument on ``__getitem__``.
+    straightforward strategy to keep homogeneity would be Strategy "kwargs
+    argument", opening to a ``**kwargs`` argument on ``__getitem__``.
 
 Having .get() become obsolete for indexing with default fallback
 ----------------------------------------------------------------
@@ -564,8 +568,8 @@ Additionally, Chris continues:
 This argument is valid but it's equally valid for any function call, and is
 generally fixed by established convention and documentation.
 
-On degeneracy of notation for Strategy 1
-----------------------------------------
+On degeneracy of notation
+-------------------------
 
 User Drekin commented: "The case of ``a[Z=3]`` and ``a[{"Z": 3}]`` is similar to
 current ``a[1, 2]`` and ``a[(1, 2)]``.  Even though one may argue that the parentheses
@@ -576,17 +580,17 @@ is not the same thing as ``f((1, 2))``.".
 References
 ==========
 
-.. [1] "keyword-only args in __getitem__"
+.. [#keyword-1] "keyword-only args in __getitem__"
        (http://article.gmane.org/gmane.comp.python.ideas/27584)
 
-.. [2] "Accepting keyword arguments for __getitem__"
+.. [#keyword-2] "Accepting keyword arguments for __getitem__"
        (https://mail.python.org/pipermail/python-ideas/2014-June/028164.html)
 
-.. [3] "namedtuple is not as good as it should be"
-       (https://mail.python.org/pipermail/python-ideas/2013-June/021257.html)
-
-.. [4] "PEP pre-draft: Support for indexing with keyword arguments"
+.. [#keyword-3] "PEP pre-draft: Support for indexing with keyword arguments"
        https://mail.python.org/pipermail/python-ideas/2014-July/028250.html
+
+.. [#namedtuple] "namedtuple is not as good as it should be"
+       (https://mail.python.org/pipermail/python-ideas/2013-June/021257.html)
 
 .. [#PEP-468] "Preserving the order of \*\*kwargs in a function." 
               http://legacy.python.org/dev/peps/pep-0468/
