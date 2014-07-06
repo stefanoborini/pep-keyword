@@ -518,12 +518,14 @@ We think this behavior would produce inconvenient results. The library Pandas us
 strings as labels, allowing notation such as
 
 ::
+
     >>> a[:, "A":"F"]
 
 to extract data from column "A" to column "F". Under the above comment, this notation
 would be equally obtained with
 
 ::
+
     >>> a[:, A="F"]
 
 which is weird and collides with the intended meaning of keyword in indexing, that
