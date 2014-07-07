@@ -59,6 +59,7 @@ One must additionally consider the extended form that allows both positional
 and keyword specification
 
 ::
+
     >>> a[3,R=3,K=4]
 
 This PEP will explore different strategies to enable the use of these notations.
