@@ -271,7 +271,7 @@ The required typename of the namedtuple could be ``Index`` or the name of the
 argument in the function definition, it keeps the ordering and is easy to
 analyse by using the ``_fields`` attribute. It is backward compatible, provided
 that C0 with more than one entry now passes a namedtuple instead of a plain
-tuple.  It should be faster than creating many one element dictionaries, too.
+tuple. 
 
 Pros 
 ''''
