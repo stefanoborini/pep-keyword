@@ -1,4 +1,4 @@
-:PEP: XXX
+:PEP: 
 :Title: Support for indexing with keyword arguments.
 :Version: $Revision: 41421 $
 :Last-Modified: $Date: 2005-11-10 06:42:20 -0800 (Thu, 10 Nov 2005) $
