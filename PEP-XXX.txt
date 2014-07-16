@@ -1,0 +1,3 @@
+Content moved to 
+
+https://github.com/stefanoborini/pep-keyword/blob/master/PEP-keyword.rst
